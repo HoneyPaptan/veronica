@@ -1,131 +1,59 @@
-# Tambo Template
+# Project Veronica
 
-This is a starter NextJS app with Tambo hooked up to get your AI app development started quickly.
+**Veronica Command Center** is an AI-powered tactical map interface powered by [Tambo](https://tambo.co) and [Next.js](https://nextjs.org/).
 
-## Get Started
+It features real-time integration with NASA FIRMS for wildfire tracking, population statistics, and an interactive map that can be controlled via natural language.
 
-1. Run `npm create-tambo@latest my-tambo-app` for a new project
+## Features
 
-2. `npm install`
+- **Natural Language Map Control**: Ask Veronica (via Tambo) to zoom to locations, show wildfires, or draw routes.
+- **NASA FIRMS Integration**: Real-time satellite data for active wildfires and thermal anomalies.
+- **Interactive Tactical Map**:
+  - **Auto-Clustering**: Handles large datasets efficiently.
+  - **Location Zoom**: "Zoom to New York", "Show me India", etc.
+  - **Route Drawing**: "Show route from London to Paris".
+  - **Auto-Fly**: Map automatically focuses on new data points.
+- **Crisis Monitoring**: Real-time tracking of crisis events with severity indicators.
 
-3. `npx tambo init`
+## Getting Started
 
-- or rename `example.env.local` to `.env.local` and add your tambo API key you can get for free [here](https://tambo.co/dashboard).
+1. **Install dependencies**:
+   ```bash
+   npm install
+   ```
 
-4. Run `npm run dev` and go to `localhost:3000` to use the app!
+2. **Configure Environment**:
+   Ensure you have your `.env.local` set up with:
+   ```
+   NEXT_PUBLIC_TAMBO_API_KEY=your_key_here
+   NEXT_PUBLIC_NASA_FIRMS_MAP_KEY=your_key_here
+   ```
 
-## Customizing
+3. **Run Development Server**:
+   ```bash
+   npm run dev
+   ```
+   Open [http://localhost:3000](http://localhost:3000) to view the app.
 
-### Change what components tambo can control
+## Project Structure
 
-You can see how components are registered with tambo in `src/lib/tambo.ts`:
+- `src/components/veronica-content.tsx`: Main entry point and layout.
+- `src/components/tactical-map.tsx`: The core map component (Interactive & generative).
+- `src/services/nasa-firms.ts`: NASA API integration service.
+- `src/lib/tambo.ts`: Tambo configuration, tools, and component registration.
 
-```tsx
-export const components: TamboComponent[] = [
-  {
-    name: "Graph",
-    description:
-      "A component that renders various types of charts (bar, line, pie) using Recharts. Supports customizable data visualization with labels, datasets, and styling options.",
-    component: Graph,
-    propsSchema: graphSchema,
-  },
-  // Add more components here
-];
-```
+## Usage Examples
 
-You can install the graph component into any project with:
+Try asking Veronica:
+- *"Show me all active wildfires globally"*
+- *"Zoom in on California and show local fires"*
+- *"Give me an overview of crisis events in Australia"*
+- *"Draw a route from Mumbai to Delhi"*
+- *"Show population statistics for Japan"*
 
-```bash
-npx tambo add graph
-```
+## Technologies
 
-The example Graph component demonstrates several key features:
-
-- Different prop types (strings, arrays, enums, nested objects)
-- Multiple chart types (bar, line, pie)
-- Customizable styling (variants, sizes)
-- Optional configurations (title, legend, colors)
-- Data visualization capabilities
-
-Update the `components` array with any component(s) you want tambo to be able to use in a response!
-
-You can find more information about the options [here](https://docs.tambo.co/concepts/generative-interfaces/generative-components)
-
-### Add tools for tambo to use
-
-Tools are defined with `inputSchema` and `outputSchema`:
-
-```tsx
-export const tools: TamboTool[] = [
-  {
-    name: "globalPopulation",
-    description:
-      "A tool to get global population trends with optional year range filtering",
-    tool: getGlobalPopulationTrend,
-    inputSchema: z.object({
-      startYear: z.number().optional(),
-      endYear: z.number().optional(),
-    }),
-    outputSchema: z.array(
-      z.object({
-        year: z.number(),
-        population: z.number(),
-        growthRate: z.number(),
-      }),
-    ),
-  },
-];
-```
-
-Find more information about tools [here.](https://docs.tambo.co/concepts/tools)
-
-### The Magic of Tambo Requires the TamboProvider
-
-Make sure in the TamboProvider wrapped around your app:
-
-```tsx
-...
-<TamboProvider
-  apiKey={process.env.NEXT_PUBLIC_TAMBO_API_KEY!}
-  components={components} // Array of components to control
-  tools={tools} // Array of tools it can use
->
-  {children}
-</TamboProvider>
-```
-
-In this example we do this in the `Layout.tsx` file, but you can do it anywhere in your app that is a client component.
-
-### Voice input
-
-The template includes a `DictationButton` component using the `useTamboVoice` hook for speech-to-text input.
-
-### MCP (Model Context Protocol)
-
-The template includes MCP support for connecting to external tools and resources. You can use the MCP hooks from `@tambo-ai/react/mcp`:
-
-- `useTamboMcpPromptList` - List available prompts from MCP servers
-- `useTamboMcpPrompt` - Get a specific prompt
-- `useTamboMcpResourceList` - List available resources
-
-See `src/components/tambo/mcp-components.tsx` for example usage.
-
-### Change where component responses are shown
-
-The components used by tambo are shown alongside the message response from tambo within the chat thread, but you can have the result components show wherever you like by accessing the latest thread message's `renderedComponent` field:
-
-```tsx
-const { thread } = useTambo();
-const latestComponent =
-  thread?.messages[thread.messages.length - 1]?.renderedComponent;
-
-return (
-  <div>
-    {latestComponent && (
-      <div className="my-custom-wrapper">{latestComponent}</div>
-    )}
-  </div>
-);
-```
-
-For more detailed documentation, visit [Tambo's official docs](https://docs.tambo.co).
+- **Tambo AI**: Generative UI and agentic capabilities.
+- **MapLibre GL / MapCN**: data-viz focused map components.
+- **Next.js 14**: React framework.
+- **Tailwind CSS**: Styling.

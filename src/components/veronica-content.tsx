@@ -1,18 +1,18 @@
 "use client";
 
 import { ChatSidebar } from "@/components/chat-sidebar";
-import { TacticalMap } from "@/components/tactical-map";
+import { InteractableTacticalMap } from "@/components/tactical-map";
 import { useMcpServers } from "@/components/tambo/mcp-config-modal";
 import { components, tools } from "@/lib/tambo";
 import { TamboProvider } from "@tambo-ai/react";
 
 /**
- * CerebroContent - Main content component with TamboProvider
+ * VeronicaContent - Main content component with TamboProvider
  * 
  * This is in a separate file to allow dynamic import with ssr: false,
  * which prevents react-media-recorder from being evaluated during SSR.
  */
-export function CerebroContent() {
+export function VeronicaContent() {
     // Load MCP server configurations
     const mcpServers = useMcpServers();
 
@@ -27,8 +27,8 @@ export function CerebroContent() {
             <div className="flex h-screen w-full overflow-hidden bg-background">
                 {/* Left Stage: Tactical Map (70% / Flex-1) */}
                 <div className="flex-1 relative h-full">
-                    {/* Default map - Tambo will render TacticalMap components in the chat when requested */}
-                    <TacticalMap
+                    {/* InteractableTacticalMap - Tambo can update this map directly */}
+                    <InteractableTacticalMap
                         markers={[]}
                         centerLongitude={0}
                         centerLatitude={20}
@@ -41,7 +41,7 @@ export function CerebroContent() {
                     <div className="p-4 border-b border-sidebar-border">
                         <h1 className="font-bold text-lg">Project Veronica</h1>
                         <p className="text-sm text-muted-foreground">
-                            Cerebro Command Center
+                            Veronica Command Center
                         </p>
                     </div>
 
@@ -53,3 +53,4 @@ export function CerebroContent() {
         </TamboProvider>
     );
 }
+
