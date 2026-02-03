@@ -10,6 +10,7 @@
 
 import { Graph, graphSchema } from "@/components/tambo/graph";
 import { DataCard, dataCardSchema } from "@/components/ui/card-data";
+import { TacticalMap, tacticalMapSchema } from "@/components/tactical-map";
 import {
   getCountryPopulations,
   getGlobalPopulationTrend,
@@ -84,6 +85,13 @@ export const tools: TamboTool[] = [
  * can be controlled by AI to dynamically render UI elements based on user interactions.
  */
 export const components: TamboComponent[] = [
+  {
+    name: "TacticalMap",
+    description:
+      "A tactical crisis map component for Project Veronica (Cerebro). Use this to display crisis events like wildfires, volcanoes, earthquakes, floods, and storms on an interactive map. You can add markers with location coordinates, set severity levels, and control the map view (center and zoom). Always use this component when the user asks about crisis events, natural disasters, or wants to visualize geographic data.",
+    component: TacticalMap,
+    propsSchema: tacticalMapSchema,
+  },
   {
     name: "Graph",
     description:
