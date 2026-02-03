@@ -23,7 +23,7 @@ import {
 /**
  * ChatSidebar component for Project Veronica
  * 
- * A streamlined chat interface designed for the Cerebro command center sidebar.
+ * A streamlined chat interface designed for the Veronica command center sidebar.
  * Based on the Tambo MessageThreadFull pattern but optimized for sidebar use.
  */
 export function ChatSidebar() {

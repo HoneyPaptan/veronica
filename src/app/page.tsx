@@ -6,8 +6,8 @@ import dynamic from "next/dynamic";
 // react-media-recorder uses Web Workers which are not available in Node.js
 // By importing the entire file dynamically, the @tambo-ai/react import
 // is deferred until client-side rendering
-const CerebroContent = dynamic(
-  () => import("@/components/cerebro-content").then((mod) => mod.CerebroContent),
+const VeronicaContent = dynamic(
+  () => import("@/components/veronica-content").then((mod) => mod.VeronicaContent),
   {
     ssr: false,
     loading: () => (
@@ -18,7 +18,7 @@ const CerebroContent = dynamic(
             <span className="size-2 rounded-full bg-muted-foreground/60 animate-pulse [animation-delay:150ms]" />
             <span className="size-2 rounded-full bg-muted-foreground/60 animate-pulse [animation-delay:300ms]" />
           </div>
-          <p className="text-sm text-muted-foreground">Loading Cerebro...</p>
+          <p className="text-sm text-muted-foreground">Loading Veronica...</p>
         </div>
       </div>
     ),
@@ -26,8 +26,8 @@ const CerebroContent = dynamic(
 );
 
 /**
- * Home page component for Project Veronica - Cerebro Command Center
+ * Home page component for Project Veronica - Veronica Command Center
  */
 export default function Home() {
-  return <CerebroContent />;
+  return <VeronicaContent />;
 }
