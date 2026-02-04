@@ -13,6 +13,7 @@ import {
 import { withInteractable } from "@tambo-ai/react";
 import { z } from "zod";
 import { useMemo, useRef, useEffect } from "react";
+import { cn } from "@/lib/utils";
 
 /**
  * Schema for crisis markers that Tambo can manipulate
@@ -24,14 +25,15 @@ export const crisisMarkerSchema = z.object({
     latitude: z.number().describe("Latitude coordinate of the crisis location"),
     longitude: z.number().describe("Longitude coordinate of the crisis location"),
     category: z
-        .enum(["wildfire", "volcano", "earthquake", "flood", "storm", "other"])
-        .describe("Category of the crisis event"),
+        .enum(["wildfire", "volcano", "earthquake", "flood", "storm", "news", "other"])
+        .describe("Category of the crisis event. Use 'news' for article markers from Tavily."),
     severity: z
         .enum(["low", "medium", "high", "critical"])
         .optional()
         .describe("Severity level of the crisis"),
     date: z.string().optional().describe("Date of the crisis event"),
     source: z.string().optional().describe("Data source for this crisis"),
+    url: z.string().optional().describe("URL link to the source article or more information. ALWAYS include this for Tavily news results."),
 });
 
 export type CrisisMarker = z.infer<typeof crisisMarkerSchema>;
@@ -142,30 +144,34 @@ export type TacticalMapProps = z.infer<typeof tacticalMapSchema>;
  * Get marker color based on crisis category
  */
 function getMarkerColor(category: CrisisMarker["category"]): string {
+    // Using bright colors that are visible on dark map backgrounds
     const colors: Record<CrisisMarker["category"], string> = {
-        wildfire: "bg-orange-500",
-        volcano: "bg-red-600",
-        earthquake: "bg-amber-500",
-        flood: "bg-blue-500",
-        storm: "bg-purple-500",
-        other: "bg-gray-500",
+        wildfire: "bg-orange-400",
+        volcano: "bg-red-500",
+        earthquake: "bg-yellow-400",
+        flood: "bg-sky-400",
+        storm: "bg-violet-400",
+        news: "bg-emerald-400",
+        other: "bg-slate-400",
     };
-    return colors[category] || "bg-gray-500";
+    return colors[category] || "bg-slate-400";
 }
 
 /**
  * Get cluster/point color based on category
  */
 function getClusterPointColor(category?: string): string {
+    // Bright colors for cluster points - visible on dark backgrounds
     const colors: Record<string, string> = {
-        wildfire: "#f97316", // orange-500
-        volcano: "#dc2626", // red-600
-        earthquake: "#f59e0b", // amber-500
-        flood: "#3b82f6", // blue-500
-        storm: "#a855f7", // purple-500
-        other: "#6b7280", // gray-500
+        wildfire: "#fb923c", // orange-400 - bright orange
+        volcano: "#ef4444", // red-500 - vivid red
+        earthquake: "#facc15", // yellow-400 - bright yellow
+        flood: "#38bdf8", // sky-400 - bright sky blue
+        storm: "#a78bfa", // violet-400 - bright violet
+        news: "#34d399", // emerald-400 - bright green
+        other: "#94a3b8", // slate-400 - light slate
     };
-    return colors[category || "wildfire"] || "#f97316";
+    return colors[category || "wildfire"] || "#fb923c";
 }
 
 /**
@@ -178,6 +184,7 @@ function getMarkerIcon(category: CrisisMarker["category"]): string {
         earthquake: "🌍",
         flood: "🌊",
         storm: "🌪️",
+        news: "📰",
         other: "⚠️",
     };
     return icons[category] || "⚠️";
@@ -199,21 +206,41 @@ function getSeverityColor(severity?: CrisisMarker["severity"]): string {
 
 /**
  * Validate that a marker has valid coordinates
+ * Handles streaming gracefully - silently ignores empty partial objects
  */
 function isValidMarker(marker: CrisisMarker): boolean {
-    return (
-        marker &&
-        typeof marker.latitude === "number" &&
-        typeof marker.longitude === "number" &&
-        !isNaN(marker.latitude) &&
-        !isNaN(marker.longitude) &&
-        marker.latitude >= -90 &&
-        marker.latitude <= 90 &&
-        marker.longitude >= -180 &&
-        marker.longitude <= 180 &&
-        typeof marker.id === "string" &&
-        typeof marker.category === "string"
-    );
+    if (!marker) return false;
+
+    // Silently ignore completely empty objects (common during streaming)
+    if (Object.keys(marker).length === 0) return false;
+
+    // Support both lat/lng and latitude/longitude (common AI variation)
+    const anyMarker = marker as Record<string, unknown>;
+    const lat = marker.latitude ?? (anyMarker.lat as number);
+    const lng = marker.longitude ?? (anyMarker.lng as number);
+
+    const checks = {
+        hasLatitude: typeof lat === "number",
+        hasLongitude: typeof lng === "number",
+        latNotNaN: lat !== undefined && !isNaN(lat),
+        lngNotNaN: lng !== undefined && !isNaN(lng),
+        latInRange: lat >= -90 && lat <= 90,
+        lngInRange: lng >= -180 && lng <= 180,
+        hasId: typeof marker.id === "string" && marker.id.length > 0,
+        hasCategory: typeof marker.category === "string" && marker.category.length > 0,
+    };
+
+    const isValid = Object.values(checks).every(Boolean);
+
+    // Only warn for markers that have SOME data but are incomplete (not empty streaming objects)
+    if (!isValid && Object.keys(marker).length > 2) {
+        const failedChecks = Object.entries(checks)
+            .filter(([, v]) => !v)
+            .map(([k]) => k);
+        console.warn("Invalid marker:", { marker, failedChecks, lat, lng });
+    }
+
+    return isValid;
 }
 
 /**
@@ -232,6 +259,7 @@ function markersToGeoJSON(markers: CrisisMarker[]): GeoJSON.FeatureCollection<Ge
                 severity: marker.severity,
                 date: marker.date,
                 source: marker.source,
+                url: marker.url,
             },
             geometry: {
                 type: "Point" as const,
@@ -264,19 +292,33 @@ export function TacticalMap({
 }: TacticalMapProps) {
     const mapRef = useRef<MapRef>(null);
 
-    // Filter out invalid markers to prevent runtime errors
+    // Normalize and filter out invalid markers to prevent runtime errors
+    // Limit to 20 markers max for performance and clarity
     const validMarkers = useMemo(() => {
-        const filtered = (markers || []).filter(isValidMarker);
-        if (filtered.length !== markers?.length) {
-            console.warn(
-                `TacticalMap: Filtered out ${(markers?.length || 0) - filtered.length} invalid markers`
-            );
+        // First normalize markers to handle lat/lng vs latitude/longitude variations
+        const normalized = (markers || []).map((m) => {
+            const anyM = m as Record<string, unknown>;
+            return {
+                ...m,
+                latitude: m.latitude ?? (anyM.lat as number),
+                longitude: m.longitude ?? (anyM.lng as number),
+            };
+        });
+
+        const filtered = normalized.filter(isValidMarker);
+        // Limit to 20 markers for performance
+        const limited = filtered.slice(0, 20);
+
+        if (limited.length > 0) {
+            console.info(`TacticalMap: ${limited.length} markers${filtered.length > 20 ? ` (limited from ${filtered.length})` : ''}`);
         }
-        return filtered;
+        return limited;
     }, [markers]);
 
-    // Determine if clustering should be used (auto-enable for 10+ markers)
-    const useClustering = enableClustering ?? validMarkers.length >= 10;
+    // Determine if clustering should be used
+    // CRITICAL: Force clustering OFF for < 50 markers even if enabled by prop
+    // This ensures we show rich Emoji icons with popups for small datasets
+    const useClustering = (enableClustering && validMarkers.length >= 50);
 
     // Convert markers to GeoJSON for clustering
     const geoJsonData = useMemo(
@@ -349,7 +391,7 @@ export function TacticalMap({
                     duration: 1500,
                 });
             }
-        }, 300);
+        }, 100);
 
         return () => clearTimeout(timer);
     }, [centerLatitude, centerLongitude, zoomLevel, validMarkers.length]);
@@ -397,20 +439,19 @@ export function TacticalMap({
                         key={marker.id}
                         longitude={marker.longitude}
                         latitude={marker.latitude}
+                        offset={[0, -10]}
                     >
                         <MarkerContent>
                             <div
-                                className={`
-                                    relative flex items-center justify-center
-                                    w-8 h-8 rounded-full
-                                    ${getMarkerColor(marker.category)}
-                                    border-2 border-white shadow-lg
-                                    text-lg cursor-pointer
-                                    hover:scale-110 transition-transform
-                                    animate-pulse
-                                `}
+                                className={cn(
+                                    "relative flex items-center justify-center w-10 h-10 rounded-full border-2 border-white shadow-xl cursor-pointer hover:scale-110 transition-transform duration-200 bg-background/50 backdrop-blur-sm",
+                                    getMarkerColor(marker.category)
+                                )}
+                                title={marker.title}
                             >
-                                {getMarkerIcon(marker.category)}
+                                <span className="text-xl filter drop-shadow-sm select-none">
+                                    {getMarkerIcon(marker.category)}
+                                </span>
                             </div>
                         </MarkerContent>
 
@@ -423,10 +464,10 @@ export function TacticalMap({
 
                                 {marker.severity && (
                                     <span
-                                        className={`
-                                            inline-block px-2 py-0.5 rounded text-xs text-white mb-2
-                                            ${getSeverityColor(marker.severity)}
-                                        `}
+                                        className={cn(
+                                            "inline-block px-2 py-0.5 rounded text-xs text-white mb-2",
+                                            getSeverityColor(marker.severity)
+                                        )}
                                     >
                                         {marker.severity.toUpperCase()}
                                     </span>
@@ -443,46 +484,61 @@ export function TacticalMap({
                                     {marker.date && <p>📅 {marker.date}</p>}
                                     {marker.source && <p>📊 Source: {marker.source}</p>}
                                 </div>
+
+                                {marker.url && (
+                                    <a
+                                        href={marker.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="mt-3 flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300 hover:underline transition-colors"
+                                    >
+                                        🔗 Read Full Article →
+                                    </a>
+                                )}
                             </div>
                         </MarkerPopup>
                     </MapMarker>
                 ))}
 
                 {/* Render routes if provided */}
-                {routes && routes.length > 0 && routes.map((route) => (
-                    <MapRoute
-                        key={route.id}
-                        id={route.id}
-                        coordinates={route.points.map((p) => [p.longitude, p.latitude] as [number, number])}
-                        color={route.color || "#3b82f6"}
-                        width={route.width || 4}
-                    />
-                ))}
-            </Map>
+                {
+                    routes && routes.length > 0 && routes.map((route) => (
+                        <MapRoute
+                            key={route.id}
+                            id={route.id}
+                            coordinates={route.points.map((p) => [p.longitude, p.latitude] as [number, number])}
+                            color={route.color || "#3b82f6"}
+                            width={route.width || 4}
+                        />
+                    ))
+                }
+            </Map >
 
             {/* Crisis counter overlay - only show for actual crisis events, not routes */}
-            {(() => {
-                // Only count actual crisis categories, not route waypoints or generic markers
-                const crisisCategories = ["wildfire", "volcano", "earthquake", "flood", "storm"];
-                const crisisMarkers = validMarkers.filter(m => crisisCategories.includes(m.category));
+            {
+                (() => {
+                    // Only count actual crisis categories including news, not route waypoints or generic markers
+                    const crisisCategories = ["wildfire", "volcano", "earthquake", "flood", "storm", "news"];
+                    const crisisMarkers = validMarkers.filter(m => crisisCategories.includes(m.category));
 
-                if (crisisMarkers.length === 0) return null;
+                    if (crisisMarkers.length === 0) return null;
 
-                return (
-                    <div className="absolute top-4 left-4 bg-background/80 backdrop-blur-sm border border-border rounded-lg px-3 py-2 shadow-lg">
-                        <div className="flex items-center gap-2">
-                            <span className="text-red-500 animate-pulse">●</span>
-                            <span className="text-sm font-medium">
-                                {crisisMarkers.length} Active Crisis Event{crisisMarkers.length !== 1 ? "s" : ""}
-                            </span>
-                            {useClustering && (
-                                <span className="text-xs text-muted-foreground">(clustered)</span>
-                            )}
+                    return (
+                        <div className="absolute top-4 left-4 bg-background/80 backdrop-blur-sm border border-border rounded-lg px-3 py-2 shadow-lg">
+                            <div className="flex items-center gap-2">
+                                <span className="text-red-500 animate-pulse">●</span>
+                                <span className="text-sm font-medium">
+                                    {crisisMarkers.length} Active Crisis Event{crisisMarkers.length !== 1 ? "s" : ""}
+                                </span>
+                                {useClustering && (
+                                    <span className="text-xs text-muted-foreground">(clustered)</span>
+                                )}
+                            </div>
                         </div>
-                    </div>
-                );
-            })()}
-        </div>
+                    );
+                })()
+            }
+        </div >
     );
 }
 

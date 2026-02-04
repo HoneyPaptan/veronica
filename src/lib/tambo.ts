@@ -26,6 +26,27 @@ import { z } from "zod";
  * This array contains all the Tambo tools that are registered for use within the application.
  * Each tool is defined with its name, description, and expected props. The tools
  * can be controlled by AI to dynamically fetch data based on user interactions.
+ * 
+ * CRITICAL WORKFLOW - ALWAYS follow this for ANY location-based request:
+ * 1. Fetch data (NASA API, Tavily MCP, etc.)
+ * 2. ALWAYS plot results on the TacticalMap with appropriate markers
+ * 3. ALWAYS zoom to the relevant region (flyToMarkers=true)
+ * 4. For NEWS/Tavily results: Include the source URL in each marker!
+ * 
+ * MARKER RULES FOR NEWS/TAVILY:
+ * - category: "news" for article markers
+ * - url: ALWAYS include the source article URL (required for news)
+ * - When user clicks the marker, they can see the link to the full article
+ * 
+ * DATA SOURCES:
+ * 1. getActiveFires: Wildfires from NASA FIRMS
+ * 2. TAVILY MCP: Earthquakes, volcanoes, floods, storms, news articles
+ * 
+ * TAVILY TIPS:
+ * - Request 5-10 results max
+ * - Use specific queries ("earthquakes Japan 2024 magnitude 6+")
+ * - Extract location coordinates and source URLs
+ * - ALWAYS plot on map even if user doesn't explicitly ask
  */
 
 export const tools: TamboTool[] = [
@@ -136,43 +157,60 @@ export const tools: TamboTool[] = [
 export const components: TamboComponent[] = [
   {
     name: "TacticalMap",
-    description: `The main interactive map component for Project Veronica. ALWAYS update this map when displaying any geographic data.
+    description: `IMPORTANT: This component controls the EXISTING map on the LEFT SIDE of the screen. 
+DO NOT render a new map in the chat - just UPDATE the existing one by setting props.
 
 CRITICAL RULES:
-1. ALWAYS set flyToMarkers=true when adding new markers so the map zooms to show them
-2. ALWAYS set enableClustering=true when you have markers to ensure they display nicely
-3. For wildfires/fires: FIRST call getActiveFires tool, THEN update the map with the returned markers
-4. For ROUTES: Only use the routes array, do NOT add markers for route waypoints - routes are drawn as lines, not crisis events
+1. ALWAYS set flyToMarkers=true when adding markers so the map auto-zooms to show them
+2. Set enableClustering=true ONLY if you have > 50 markers
+3. For wildfires: Call getActiveFires FIRST, then update map with returned markers
+4. For NEWS/Tavily results: Use category="news" and INCLUDE the url field!
 
-LOCATION ZOOM - Use these coordinates when user asks to zoom to a location:
-- New York: lat=40.7128, lng=-74.0060, zoom=10
-- Los Angeles: lat=34.0522, lng=-118.2437, zoom=10
-- London: lat=51.5074, lng=-0.1278, zoom=10
-- Tokyo: lat=35.6762, lng=139.6503, zoom=10
-- Sydney: lat=-33.8688, lng=151.2093, zoom=10
-- Paris: lat=48.8566, lng=2.3522, zoom=10
-- USA: lat=39.8283, lng=-98.5795, zoom=4
-- Europe: lat=54.5260, lng=15.2551, zoom=3
-- Asia: lat=34.0479, lng=100.6197, zoom=3
-- California: lat=36.7783, lng=-119.4179, zoom=6
+MARKER CATEGORIES:
+- wildfire, volcano, earthquake, flood, storm: Crisis events
+- news: Articles from Tavily (MUST include url property for clickable links)
+
+NEWS MARKER EXAMPLE:
+{ id: "1", title: "Earthquake in Japan", category: "news", latitude: 35.6, longitude: 139.6, url: "https://..." }
+
+LOCATION PRESETS (for zooming):
+- USA: lat=39.8, lng=-98.5, zoom=4 | Europe: lat=54.5, lng=15.2, zoom=3
+- Asia: lat=34.0, lng=100.6, zoom=3 | World: lat=20, lng=0, zoom=2
 
 PROPS:
-- markers: ONLY for crisis events (wildfire, volcano, earthquake, flood, storm). Do NOT use for routes.
-- routes: Array of {id, points: [{latitude, longitude}], color?, width?} - for drawing paths/routes
-- centerLatitude, centerLongitude: Map center (use for location zoom)
-- zoomLevel: 1-3(continent), 4-6(country), 7-10(city), 11-14(neighborhood), 15-18(street)
-- flyToMarkers: true = auto-zoom to fit all markers (ALWAYS use when adding markers)
-- enableClustering: true = cluster nearby markers (ALWAYS use with markers)
-
-CATEGORIES (for markers only): wildfire, volcano, earthquake, flood, storm
-SEVERITY: low, medium, high, critical`,
+- markers: Array with id, title, lat, lng, category, url (for news)
+- flyToMarkers: true (ALWAYS use when adding markers!)
+- enableClustering: true (ALWAYS use for multiple markers)`,
     component: TacticalMap,
     propsSchema: tacticalMapSchema,
   },
   {
     name: "Graph",
-    description:
-      "A component that renders various types of charts (bar, line, pie) using Recharts. Supports customizable data visualization with labels, datasets, and styling options.",
+    description: `A data visualization component that renders bar, line, and pie charts using Recharts.
+
+USE THIS WHEN: User asks to visualize data, show trends, compare statistics, or display charts/graphs.
+
+DATA SOURCES (in priority order):
+1. LOCAL TOOLS: Use getActiveFires for wildfires, countryPopulation/globalPopulation for population data
+2. TAVILY MCP: For earthquakes, volcanoes, floods, storms, historical data, or ANY data not available locally - use Tavily to search for real data first, then display it
+
+ALWAYS fetch real data before displaying a graph. Never show placeholder data without informing the user.
+
+PROPS:
+- data: Object containing chart configuration:
+  - type: "bar" | "line" | "pie" (choose based on data type - bar for comparisons, line for trends, pie for proportions)
+  - labels: Array of category labels (e.g., ["Jan", "Feb", "Mar"] or ["USA", "China", "India"])
+  - datasets: Array of {label, data, color?} where data is array of numbers matching labels
+- title: Clear descriptive title for the chart
+- showLegend: true/false (default true)
+- variant: "default" | "solid" | "bordered"
+- size: "sm" | "default" | "lg"
+
+EXAMPLE:
+{
+  data: { type: "bar", labels: ["USA", "China", "India"], datasets: [{label: "Population (millions)", data: [331, 1412, 1408]}] },
+  title: "Top 3 Countries by Population"
+}`,
     component: Graph,
     propsSchema: graphSchema,
   },
