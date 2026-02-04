@@ -5,6 +5,7 @@ import { InteractableTacticalMap } from "@/components/tactical-map";
 import { useMcpServers } from "@/components/tambo/mcp-config-modal";
 import { components, tools } from "@/lib/tambo";
 import { TamboProvider } from "@tambo-ai/react";
+import { useEffect } from "react";
 
 /**
  * VeronicaContent - Main content component with TamboProvider
@@ -15,6 +16,24 @@ import { TamboProvider } from "@tambo-ai/react";
 export function VeronicaContent() {
     // Load MCP server configurations
     const mcpServers = useMcpServers();
+
+    // Suppress harmless MCP -32601 "Method not found" console errors
+    // These occur when MCP servers don't support certain methods but are not fatal
+    useEffect(() => {
+        const originalError = console.error;
+        console.error = (...args) => {
+            // Filter out MCP -32601 errors (Method not found)
+            const message = args[0]?.toString() || '';
+            if (message.includes('-32601') || message.includes('Method not found')) {
+                // Silently ignore these harmless MCP protocol errors
+                return;
+            }
+            originalError.apply(console, args);
+        };
+        return () => {
+            console.error = originalError;
+        };
+    }, []);
 
     return (
         <TamboProvider
