@@ -10,7 +10,6 @@
 
 import { Graph, graphSchema } from "@/components/tambo/graph";
 import { DataCard, dataCardSchema } from "@/components/ui/card-data";
-import { TacticalMap, tacticalMapSchema } from "@/components/tactical-map";
 import { NewsCard, newsCardSchema } from "@/components/tambo/news-card";
 import { TamboTool, TamboComponent } from "@tambo-ai/react";
 
@@ -25,38 +24,10 @@ export { tools } from "@/lib/tambo-tools";
  * can be controlled by AI to dynamically render UI elements based on user interactions.
  */
 export const components: TamboComponent[] = [
-  {
-    name: "TacticalMap",
-    description: `IMPORTANT: This component controls the EXISTING map on the LEFT SIDE of the screen. 
-DO NOT render a new map in the chat - just UPDATE the existing one by setting props.
-
-CRITICAL RULES:
-1. ALWAYS set flyToMarkers=true when adding markers so the map auto-zooms to show them
-2. Set enableClustering=true ONLY if you have > 50 markers
-3. For wildfires: Call getActiveFires FIRST, then update map with returned markers
-4. For NEWS/Tavily results: Use category="news" and INCLUDE the url field!
-5. For Tavily results WITHOUT precise coordinates: set regionName to a country/region string (e.g. "india", "europe") so the map can still center on the correct area, and set highlightRegions (e.g. ["india","china"]) so those regions are shaded on the map using GeoJSON layers.
-
-MARKER CATEGORIES:
-- wildfire, volcano, earthquake, flood, storm: Crisis events
-- news: Articles from Tavily (MUST include url property for clickable links)
-
-NEWS MARKER EXAMPLE:
-{ id: "1", title: "Earthquake in Japan", category: "news", latitude: 35.6, longitude: 139.6, url: "https://..." }
-
-LOCATION PRESETS (for zooming):
-- USA: lat=39.8, lng=-98.5, zoom=4 | Europe: lat=54.5, lng=15.2, zoom=3
-- Asia: lat=34.0, lng=100.6, zoom=3 | World: lat=20, lng=0, zoom=2
-
-PROPS:
-- markers: Array with id, title, lat, lng, category, url (for news)
-- flyToMarkers: true (ALWAYS use when adding markers!)
-- enableClustering: true (ALWAYS use for multiple markers)
-- regionName: string region/country name to center the view when there are no markers
-- highlightRegions: array of region names to draw shaded tactical coverage polygons for (e.g. ["india","china"])`,
-    component: TacticalMap,
-    propsSchema: tacticalMapSchema,
-  },
+  // NOTE: TacticalMap is NOT in this array because it's registered as an INTERACTABLE
+  // via withInteractable() in tactical-map.tsx. This means Tambo will UPDATE the existing
+  // map on the left side of the screen instead of rendering a new map in the chat.
+  // The InteractableTacticalMap component handles this automatically.
   {
     name: "Graph",
     description: `A data visualization component that renders bar, line, and pie charts using Recharts.

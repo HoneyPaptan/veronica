@@ -14,11 +14,44 @@ import {
     ThreadContentMessages,
 } from "@/components/tambo/thread-content";
 import type { Suggestion } from "@tambo-ai/react";
+import { useTamboThreadInput } from "@tambo-ai/react";
 import {
     MessageSuggestions,
     MessageSuggestionsList,
     MessageSuggestionsStatus,
 } from "@/components/tambo/message-suggestions";
+import { useMapChatContext } from "@/components/veronica-content";
+import { useEffect } from "react";
+
+/**
+ * Component that handles auto-submitting queries from the map
+ */
+function MapQueryHandler() {
+    const { pendingQuery, setPendingQuery } = useMapChatContext();
+    const { setValue, submit } = useTamboThreadInput();
+
+    useEffect(() => {
+        if (pendingQuery) {
+            // Set the value in the input
+            setValue(pendingQuery);
+            
+            // Submit after a short delay to ensure the value is set
+            const timer = setTimeout(async () => {
+                try {
+                    await submit({ streamResponse: true });
+                } catch (error) {
+                    console.error('Failed to submit map query:', error);
+                }
+                // Clear the pending query
+                setPendingQuery(null);
+            }, 100);
+
+            return () => clearTimeout(timer);
+        }
+    }, [pendingQuery, setValue, submit, setPendingQuery]);
+
+    return null;
+}
 
 /**
  * ChatSidebar component for Project Veronica
@@ -82,6 +115,8 @@ export function ChatSidebar() {
                             <MessageInputSubmitButton />
                         </MessageInputToolbar>
                         <MessageInputError />
+                        {/* Handler for map queries - must be inside MessageInput context */}
+                        <MapQueryHandler />
                     </MessageInput>
                 </div>
             </div>

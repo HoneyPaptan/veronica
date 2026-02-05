@@ -9,8 +9,9 @@ import {
   ToolcallInfo,
   type messageVariants,
 } from "@/components/tambo/message";
+import { AsciiLoader } from "@/components/ui/ascii-loader";
 import { cn } from "@/lib/utils";
-import { type TamboThreadMessage, useTambo } from "@tambo-ai/react";
+import { type TamboThreadMessage, useTambo, useTamboThreadInput } from "@tambo-ai/react";
 import { type VariantProps } from "class-variance-authority";
 import * as React from "react";
 
@@ -121,6 +122,68 @@ export type ThreadContentMessagesProps = React.HTMLAttributes<HTMLDivElement>;
  * </ThreadContent>
  * ```
  */
+/**
+ * Component to handle error display with retry functionality
+ */
+function MessageErrorDisplay({ 
+  message, 
+  lastUserMessage 
+}: { 
+  message: TamboThreadMessage;
+  lastUserMessage?: TamboThreadMessage;
+}) {
+  const { setValue, submit } = useTamboThreadInput();
+  const [isRetrying, setIsRetrying] = React.useState(false);
+
+  // Check if message has an error
+  const hasError = !!message.error;
+  const errorMessage = typeof message.error === 'string' 
+    ? message.error 
+    : (message.error as any)?.message || "An error occurred";
+
+  const handleRetry = React.useCallback(async () => {
+    if (!lastUserMessage) return;
+    
+    setIsRetrying(true);
+    try {
+      // Get the last user message content
+      const content = typeof lastUserMessage.content === 'string' 
+        ? lastUserMessage.content 
+        : Array.isArray(lastUserMessage.content)
+          ? lastUserMessage.content.find(c => c?.type === 'text')?.text || ''
+          : '';
+      
+      if (content) {
+        setValue(content);
+        // Small delay to ensure value is set
+        await new Promise(resolve => setTimeout(resolve, 50));
+        await submit({ streamResponse: true });
+      }
+    } catch (error) {
+      console.error('Retry failed:', error);
+    } finally {
+      setIsRetrying(false);
+    }
+  }, [lastUserMessage, setValue, submit]);
+
+  if (!hasError) return null;
+
+  return (
+    <div className="px-5 py-3">
+      <AsciiLoader
+        isError={true}
+        errorMessage={errorMessage}
+        onRetry={handleRetry}
+      />
+      {isRetrying && (
+        <div className="mt-2 text-xs text-muted-foreground">
+          Retrying...
+        </div>
+      )}
+    </div>
+  );
+}
+
 const ThreadContentMessages = React.forwardRef<
   HTMLDivElement,
   ThreadContentMessagesProps
@@ -131,6 +194,16 @@ const ThreadContentMessages = React.forwardRef<
     (message) => message.role !== "system" && !message.parentMessageId,
   );
 
+  // Find the last user message for retry functionality
+  const lastUserMessage = React.useMemo(() => {
+    for (let i = filteredMessages.length - 1; i >= 0; i--) {
+      if (filteredMessages[i].role === 'user') {
+        return filteredMessages[i];
+      }
+    }
+    return undefined;
+  }, [filteredMessages]);
+
   return (
     <div
       ref={ref}
@@ -139,6 +212,8 @@ const ThreadContentMessages = React.forwardRef<
       {...props}
     >
       {filteredMessages.map((message, index) => {
+        const hasError = !!message.error;
+        
         return (
           <div
             key={
@@ -151,7 +226,7 @@ const ThreadContentMessages = React.forwardRef<
               role={message.role === "assistant" ? "assistant" : "user"}
               message={message}
               variant={variant}
-              isLoading={isGenerating && index === filteredMessages.length - 1}
+              isLoading={isGenerating && index === filteredMessages.length - 1 && !hasError}
               className={cn(
                 "flex w-full",
                 message.role === "assistant" ? "justify-start" : "justify-end",
@@ -173,6 +248,13 @@ const ThreadContentMessages = React.forwardRef<
                   }
                 />
                 <ToolcallInfo />
+                {/* Show error with retry button if message has error */}
+                {hasError && (
+                  <MessageErrorDisplay 
+                    message={message} 
+                    lastUserMessage={lastUserMessage}
+                  />
+                )}
                 <MessageRenderedComponentArea className="w-full" />
               </div>
             </Message>

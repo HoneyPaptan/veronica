@@ -160,11 +160,15 @@ function getLocationCoordinates(location: string): { lat: number; lng: number } 
 export interface SearchGNewsInput {
     query: string;
     location?: string;
+    /** Exact latitude for marker placement (from map selection) */
+    latitude?: number;
+    /** Exact longitude for marker placement (from map selection) */
+    longitude?: number;
 }
 
 /**
  * Search GNews API for articles.
- * @param input - Object containing query and optional location
+ * @param input - Object containing query and optional location/coordinates
  * @returns Array of CrisisMarker objects for display on the map
  */
 export async function searchGNews(
@@ -174,6 +178,8 @@ export async function searchGNews(
     // Handle both object and string inputs for backward compatibility
     let query: string;
     let location: string | undefined;
+    let exactLat: number | undefined;
+    let exactLng: number | undefined;
     
     if (typeof input === "string") {
         query = input;
@@ -181,6 +187,8 @@ export async function searchGNews(
     } else {
         query = input.query;
         location = input.location;
+        exactLat = input.latitude;
+        exactLng = input.longitude;
     }
 
     const apiKey = process.env.NEXT_PUBLIC_GNEWS_API_KEY;
@@ -204,9 +212,12 @@ export async function searchGNews(
         // First try: top-headlines with country filter if location is provided
         const countryCode = location ? getCountryCode(location) : undefined;
         
+        // Limit to 5 articles for location-specific queries, 10 for general queries
+        const maxArticles = location ? "5" : "10";
+        
         const headlinesUrl = new URL(`${GNEWS_API_BASE}/top-headlines`);
         headlinesUrl.searchParams.append("lang", "en");
-        headlinesUrl.searchParams.append("max", "10");
+        headlinesUrl.searchParams.append("max", maxArticles);
         headlinesUrl.searchParams.append("apikey", apiKey);
         headlinesUrl.searchParams.append("category", "general");
         
@@ -235,7 +246,7 @@ export async function searchGNews(
             
             const searchUrl = new URL(`${GNEWS_API_BASE}/search`);
             searchUrl.searchParams.append("lang", "en");
-            searchUrl.searchParams.append("max", "10");
+            searchUrl.searchParams.append("max", maxArticles); // Use same limit as headlines
             searchUrl.searchParams.append("apikey", apiKey);
             
             // Build search query
@@ -267,36 +278,60 @@ export async function searchGNews(
         return [];
     }
 
-    // Get coordinates for the location
-    const coords = location ? getLocationCoordinates(location) : null;
-    const lat = coords?.lat || 0;
-    const lng = coords?.lng || 0;
+    // Determine base coordinates:
+    // 1. Use exact coordinates if provided (from map selection)
+    // 2. Fall back to location preset lookup
+    // 3. Default to 0,0 if nothing available
+    let baseLat: number;
+    let baseLng: number;
+    
+    if (typeof exactLat === 'number' && typeof exactLng === 'number') {
+        // Use exact coordinates from map selection
+        baseLat = exactLat;
+        baseLng = exactLng;
+        console.log("Using exact coordinates from map selection:", baseLat, baseLng);
+    } else {
+        // Fall back to location preset lookup
+        const coords = location ? getLocationCoordinates(location) : null;
+        baseLat = coords?.lat ?? 20; // Default to world center
+        baseLng = coords?.lng ?? 0;
+        console.log("Using preset coordinates for location:", location, baseLat, baseLng);
+    }
 
     // Create individual markers for each article, spread around the location
     const markers: CrisisMarker[] = articles.map((article, idx) => {
         // Spread markers slightly around the center point for visibility
-        const offsetLat = (Math.random() - 0.5) * 2; // +/- 1 degree
-        const offsetLng = (Math.random() - 0.5) * 2;
+        // Use smaller offset (0.1 degree ~= 11km) for better clustering
+        const offsetLat = (Math.random() - 0.5) * 0.2;
+        const offsetLng = (Math.random() - 0.5) * 0.2;
+        
+        // Ensure no null/undefined values - use empty strings as fallbacks
+        const title = article.title || "News Article";
+        const description = article.description || article.content?.substring(0, 200) || "No description available";
+        const sourceName = article.source?.name || "Unknown Source";
+        const articleUrl = article.url || "";
+        const publishedAt = article.publishedAt || new Date().toISOString();
+        const imageUrl = article.image || "";
         
         return {
             id: `gnews-${idx}-${Date.now()}`,
-            title: article.title,
-            description: article.description || article.content?.substring(0, 200) || "",
+            title,
+            description,
             category: "news" as const,
             severity: "low" as const,
-            latitude: lat + offsetLat,
-            longitude: lng + offsetLng,
-            date: article.publishedAt,
-            source: article.source.name,
-            url: article.url,
+            latitude: baseLat + offsetLat,
+            longitude: baseLng + offsetLng,
+            date: publishedAt,
+            source: sourceName,
+            url: articleUrl,
             relatedNews: [{
                 id: `news-${idx}-${Date.now()}`,
-                title: article.title,
-                url: article.url,
-                source: article.source.name,
-                snippet: article.description,
-                publishedAt: article.publishedAt,
-                image: article.image
+                title,
+                url: articleUrl,
+                source: sourceName,
+                snippet: description,
+                publishedAt,
+                image: imageUrl
             }]
         };
     });
