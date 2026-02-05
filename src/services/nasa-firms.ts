@@ -9,7 +9,7 @@
  * Requires: NEXT_PUBLIC_NASA_FIRMS_MAP_KEY environment variable
  */
 
-import type { CrisisMarker } from "@/components/tactical-map";
+import type { CrisisMarker } from "@/lib/markers";
 
 // Region presets with bounding box coordinates [west, south, east, north]
 export const REGION_PRESETS: Record<string, [number, number, number, number]> = {

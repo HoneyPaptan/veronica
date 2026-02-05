@@ -499,18 +499,48 @@ const MessageInputInternal = React.forwardRef<
       // Extract resource names directly from editor at submit time to ensure we have the latest
       let latestResourceNames: Record<string, string> = {};
       const editor = editorRef.current;
-      if (editor) {
-        const extracted = editor.getTextWithResourceURIs();
-        latestResourceNames = extracted.resourceNames;
+      
+      // Ensure editor is ready before attempting to extract content
+      if (editor && value) {
+        try {
+          // Add a small delay to ensure TipTap editor state is fully synchronized
+          await new Promise(resolve => setTimeout(resolve, 10));
+          const extracted = editor.getTextWithResourceURIs();
+          latestResourceNames = extracted.resourceNames;
+        } catch (editorError) {
+          console.error("Failed to extract resource names from editor:", editorError);
+          // Continue with empty resource names if editor extraction fails
+          latestResourceNames = {};
+        }
       }
 
       const imageIdsAtSubmitTime = images.map((image) => image.id);
 
       try {
-        await submit({
-          streamResponse: true,
-          resourceNames: latestResourceNames,
-        });
+        // Add a small delay to ensure editor state is stable before submitting
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
+        // Submit with error handling for stream failures
+        try {
+          await submit({
+            streamResponse: true,
+            resourceNames: latestResourceNames,
+          });
+        } catch (submitError) {
+          // Handle specific streaming errors more gracefully
+          if (submitError instanceof Error && 
+              (submitError.message.includes("input stream") || 
+               submitError.message.includes("stream error"))) {
+            // Retry once after a brief delay for stream errors
+            await new Promise(resolve => setTimeout(resolve, 100));
+            await submit({
+              streamResponse: true,
+              resourceNames: latestResourceNames,
+            });
+          } else {
+            throw submitError; // Re-throw non-stream errors
+          }
+        }
         setValue("");
         // Clear only the images that were staged when submission started so
         // any images added while the request was in-flight are preserved.
@@ -527,12 +557,16 @@ const MessageInputInternal = React.forwardRef<
         // On submit failure, also clear image error
         setImageError(null);
 
-        // Agentic error handling
+        // Enhanced error handling for streaming issues
         let errorMessage = "Failed to send message. Please try again.";
         if (error instanceof Error) {
           errorMessage = error.message;
           if (errorMessage.toLowerCase().includes("input stream") || errorMessage.toLowerCase().includes("stream error")) {
+            // Provide more helpful error message for stream issues
             errorMessage = "SYSTEM FAULT: INPUT_STREAM_ERROR // PLEASE RETRY";
+            console.warn("Streaming error detected. This may be due to rapid input or connection issues.");
+          } else if (errorMessage.toLowerCase().includes("network") || errorMessage.toLowerCase().includes("fetch")) {
+            errorMessage = "NETWORK ERROR: Check connection and retry";
           }
         }
 
