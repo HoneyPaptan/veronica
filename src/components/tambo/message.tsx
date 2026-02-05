@@ -212,10 +212,10 @@ const LoadingIndicator: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({
   ...props
 }) => {
   return (
-    <div className={cn("flex items-center gap-1", className)} {...props}>
-      <span className="w-1 h-1 bg-current rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-      <span className="w-1 h-1 bg-current rounded-full animate-bounce [animation-delay:-0.2s]"></span>
-      <span className="w-1 h-1 bg-current rounded-full animate-bounce [animation-delay:-0.1s]"></span>
+    <div className={cn("flex items-center gap-1.5", className)} {...props}>
+      <span className="w-1.5 h-1.5 bg-current/60 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+      <span className="w-1.5 h-1.5 bg-current/60 rounded-full animate-bounce [animation-delay:-0.2s]"></span>
+      <span className="w-1.5 h-1.5 bg-current/60 rounded-full animate-bounce [animation-delay:-0.1s]"></span>
     </div>
   );
 };
@@ -336,7 +336,7 @@ const MessageContent = React.forwardRef<HTMLDivElement, MessageContentProps>(
       <div
         ref={ref}
         className={cn(
-          "relative block rounded-3xl px-4 py-2 text-[15px] leading-relaxed transition-all duration-200 font-medium max-w-full [&_p]:py-1 [&_li]:list-item",
+          "relative block rounded-2xl px-5 py-3 text-[15px] leading-relaxed transition-all duration-200 font-medium max-w-full [&_p]:py-1 [&_li]:list-item",
           className,
         )}
         data-slot="message-content"
@@ -594,7 +594,7 @@ const SamplingSubThread = ({
                   className={cn(
                     "whitespace-pre-wrap",
                     m.role === "assistant" &&
-                      "bg-muted/50 rounded-md p-2 inline-block w-fit",
+                    "bg-muted/50 rounded-md p-2 inline-block w-fit",
                   )}
                 >
                   {getSafeContent(m.content)}

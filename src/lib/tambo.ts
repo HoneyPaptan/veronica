@@ -43,8 +43,9 @@ import { z } from "zod";
  * 2. TAVILY MCP: Earthquakes, volcanoes, floods, storms, news articles
  * 
  * TAVILY TIPS:
- * - Request 5-10 results max
- * - Use specific queries ("earthquakes Japan 2024 magnitude 6+")
+ * - CRITICAL: When searching for data to GRAPH, you MUST explicitly search for "annual statistics", "yearly data", or "by country" to get aggregate numbers suitable for charts.
+ * - ALWAYS LIMIT RESULTS to 5 items max when fetching data for graphs to prevent rate limits and ensure clean visualization.
+ * - Use specific queries ("wildfire acres burned California 2024 by month")
  * - Extract location coordinates and source URLs
  * - ALWAYS plot on map even if user doesn't explicitly ask
  */
@@ -165,6 +166,7 @@ CRITICAL RULES:
 2. Set enableClustering=true ONLY if you have > 50 markers
 3. For wildfires: Call getActiveFires FIRST, then update map with returned markers
 4. For NEWS/Tavily results: Use category="news" and INCLUDE the url field!
+5. For Tavily results WITHOUT precise coordinates: set regionName to a country/region string (e.g. "india", "europe") so the map can still center on the correct area, and set highlightRegions (e.g. ["india","china"]) so those regions are shaded on the map using GeoJSON layers.
 
 MARKER CATEGORIES:
 - wildfire, volcano, earthquake, flood, storm: Crisis events
@@ -180,7 +182,9 @@ LOCATION PRESETS (for zooming):
 PROPS:
 - markers: Array with id, title, lat, lng, category, url (for news)
 - flyToMarkers: true (ALWAYS use when adding markers!)
-- enableClustering: true (ALWAYS use for multiple markers)`,
+- enableClustering: true (ALWAYS use for multiple markers)
+- regionName: string region/country name to center the view when there are no markers
+- highlightRegions: array of region names to draw shaded tactical coverage polygons for (e.g. ["india","china"])`,
     component: TacticalMap,
     propsSchema: tacticalMapSchema,
   },
@@ -192,7 +196,8 @@ USE THIS WHEN: User asks to visualize data, show trends, compare statistics, or 
 
 DATA SOURCES (in priority order):
 1. LOCAL TOOLS: Use getActiveFires for wildfires, countryPopulation/globalPopulation for population data
-2. TAVILY MCP: For earthquakes, volcanoes, floods, storms, historical data, or ANY data not available locally - use Tavily to search for real data first, then display it
+2. TAVILY MCP: For earthquakes, volcanoes, floods, storms, historical data, or ANY data not available locally - use Tavily to search for real data first, then display it.
+    IMPORTANT: When using Tavily for graph data, LIMIT search results to 5 items to avoid rate limits and ensure relevant data.
 
 ALWAYS fetch real data before displaying a graph. Never show placeholder data without informing the user.
 

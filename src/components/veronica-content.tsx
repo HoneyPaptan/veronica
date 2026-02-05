@@ -4,6 +4,7 @@ import { ChatSidebar } from "@/components/chat-sidebar";
 import { InteractableTacticalMap } from "@/components/tactical-map";
 import { useMcpServers } from "@/components/tambo/mcp-config-modal";
 import { components, tools } from "@/lib/tambo";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { TamboProvider } from "@tambo-ai/react";
 import { useEffect } from "react";
 
@@ -45,7 +46,7 @@ export function VeronicaContent() {
         >
             <div className="flex h-screen w-full overflow-hidden bg-background">
                 {/* Left Stage: Tactical Map (70% / Flex-1) */}
-                <div className="flex-1 relative h-full">
+                <div className="flex-1 relative h-full bg-zinc-950">
                     {/* InteractableTacticalMap - Tambo can update this map directly */}
                     <InteractableTacticalMap
                         markers={[]}
@@ -56,15 +57,25 @@ export function VeronicaContent() {
                 </div>
 
                 {/* Right Sidebar: Chat Interface (30%) */}
-                <aside className="w-[30%] min-w-[320px] h-full border-l border-border bg-sidebar flex flex-col">
-                    <div className="p-4 border-b border-sidebar-border">
-                        <h1 className="font-bold text-lg">Project Veronica</h1>
-                        <p className="text-sm text-muted-foreground">
-                            Veronica Command Center
-                        </p>
+                <aside className="w-[30%] min-w-[320px] h-full border-l border-border bg-sidebar flex flex-col font-mono text-sm bg-dot-pattern relative">
+                    <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] pointer-events-none" />
+                    <div className="p-4 border-b border-border relative z-10 flex justify-between items-center bg-background/80 backdrop-blur-sm">
+                        <div>
+                            <h1 className="font-bold tracking-tight text-xs text-muted-foreground uppercase mb-1">Project Veronica</h1>
+                            <div className="text-sm font-semibold tracking-wider text-foreground flex items-center gap-2">
+                                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                                [ COMMAND_CENTER ]
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="text-[10px] text-muted-foreground/50 border border-border px-1 py-0.5 rounded">
+                                SYS.ONLINE
+                            </div>
+                            <ThemeToggle />
+                        </div>
                     </div>
 
-                    <div className="flex-1 overflow-hidden">
+                    <div className="flex-1 overflow-hidden relative z-10">
                         <ChatSidebar />
                     </div>
                 </aside>

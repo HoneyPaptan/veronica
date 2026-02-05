@@ -49,8 +49,8 @@ export function ChatSidebar() {
     ];
 
     return (
-        <ThreadContainer disableSidebarSpacing className="h-full">
-            <ScrollableMessageContainer className="p-4">
+        <ThreadContainer disableSidebarSpacing className="h-full bg-background/50 backdrop-blur-sm">
+            <ScrollableMessageContainer className="p-4 scroll-smooth">
                 <ThreadContent>
                     <ThreadContentMessages />
                 </ThreadContent>
@@ -63,13 +63,27 @@ export function ChatSidebar() {
 
             {/* Message input */}
             <div className="px-4 pb-4">
-                <MessageInput>
-                    <MessageInputTextarea placeholder="Command the map..." />
-                    <MessageInputToolbar>
-                        <MessageInputSubmitButton />
-                    </MessageInputToolbar>
-                    <MessageInputError />
-                </MessageInput>
+                <div className="relative border border-border bg-muted/20 backdrop-blur-sm p-1">
+                    {/* Corner accents */}
+                    <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-foreground/20" />
+                    <div className="absolute top-0 right-0 w-2 h-2 border-t border-r border-foreground/20" />
+                    <div className="absolute bottom-0 left-0 w-2 h-2 border-b border-l border-foreground/20" />
+                    <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-foreground/20" />
+
+                    <MessageInput variant="bordered" className="font-mono text-sm [&_textarea]:min-h-[2.5rem] [&_textarea]:bg-transparent border-0 ring-0 shadow-none">
+                        <div className="flex items-center px-2 py-1 border-b border-border mb-1 text-[10px] text-muted-foreground/50 select-none">
+                            <span>USER_INPUT //</span>
+                        </div>
+                        <MessageInputTextarea
+                            placeholder="ENTER_COMMAND..."
+                            className="bg-transparent border-0 focus-visible:ring-0 px-2 py-1 placeholder:text-muted-foreground/30 font-mono text-sm tracking-tight text-foreground"
+                        />
+                        <MessageInputToolbar className="px-2 pb-1 opacity-50 hover:opacity-100 transition-opacity">
+                            <MessageInputSubmitButton />
+                        </MessageInputToolbar>
+                        <MessageInputError />
+                    </MessageInput>
+                </div>
             </div>
 
             {/* Message suggestions */}

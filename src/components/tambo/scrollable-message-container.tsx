@@ -75,28 +75,34 @@ export const ScrollableMessageContainer = React.forwardRef<
     lastScrollTopRef.current = scrollTop;
   }, []);
 
-  // Auto-scroll to bottom when message content changes
+  // Auto-scroll to bottom when messages change or during generation
   useEffect(() => {
-    if (scrollContainerRef.current && messagesContent && shouldAutoscroll) {
+    // Always scroll if we're in "stick to bottom" mode
+    if (shouldAutoscroll && scrollContainerRef.current) {
       const scroll = () => {
         if (scrollContainerRef.current) {
+          // instant scroll if the distance is large to prevent "chasing", smooth otherwise
+          const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+          const distance = scrollHeight - scrollTop - clientHeight;
+
           scrollContainerRef.current.scrollTo({
             top: scrollContainerRef.current.scrollHeight,
-            behavior: "smooth",
+            behavior: distance > 300 ? "auto" : "smooth",
           });
         }
       };
 
-      if (generationStage === GenerationStage.STREAMING_RESPONSE) {
-        // During streaming, scroll immediately
+      // Use requestAnimationFrame for smoother updates during streaming
+      requestAnimationFrame(scroll);
+
+      // Double check after a small delay to catch layout shifts (e.g. images loading)
+      const frameId = requestAnimationFrame(() => {
         requestAnimationFrame(scroll);
-      } else {
-        // For other updates, use a short delay to batch rapid changes
-        const timeoutId = setTimeout(scroll, 50);
-        return () => clearTimeout(timeoutId);
-      }
+      });
+
+      return () => cancelAnimationFrame(frameId);
     }
-  }, [messagesContent, generationStage, shouldAutoscroll]);
+  }, [messagesContent, generationStage, shouldAutoscroll, thread.messages?.length]); // added thread.messages.length dep
 
   return (
     <div

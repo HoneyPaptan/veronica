@@ -159,7 +159,7 @@ const MessageSuggestions = React.forwardRef<
           clearTimeout(loadingTimeoutRef.current);
         }
 
-        loadingTimeoutRef.current = setTimeout(() => {}, 5000);
+        loadingTimeoutRef.current = setTimeout(() => { }, 5000);
       }
 
       return () => {
@@ -278,6 +278,8 @@ const MessageSuggestionsStatus = React.forwardRef<
 });
 MessageSuggestionsStatus.displayName = "MessageSuggestions.Status";
 
+import { AsciiLoader } from "@/components/ui/ascii-loader";
+
 /**
  * Internal component to render generation stage content
  */
@@ -289,15 +291,11 @@ function GenerationStageContent({
   isGenerating: boolean;
 }) {
   if (generationStage && generationStage !== GenerationStage.COMPLETE) {
-    return <MessageGenerationStage />;
+    // Check if stage is "fetching context" or similar and normalize it if needed
+    return <AsciiLoader text={generationStage} variant="bar" />;
   }
   if (isGenerating) {
-    return (
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <Loader2Icon className="h-4 w-4 animate-spin" />
-        <p>Generating suggestions...</p>
-      </div>
-    );
+    return <AsciiLoader text="THINKING" variant="spinner" />;
   }
   return null;
 }
@@ -346,45 +344,45 @@ const MessageSuggestionsList = React.forwardRef<
     >
       {suggestions.length > 0
         ? suggestions.map((suggestion, index) => (
-            <Tooltip
-              key={suggestion.id}
-              content={
-                <span suppressHydrationWarning>
-                  {modKey}+{altKey}+{index + 1}
-                </span>
+          <Tooltip
+            key={suggestion.id}
+            content={
+              <span suppressHydrationWarning>
+                {modKey}+{altKey}+{index + 1}
+              </span>
+            }
+            side="top"
+          >
+            <button
+              className={cn(
+                "py-2 px-2.5 rounded-2xl text-xs transition-colors",
+                "border border-flat",
+                getSuggestionButtonClassName({
+                  isGenerating,
+                  isSelected: selectedSuggestionId === suggestion.id,
+                }),
+              )}
+              onClick={async () =>
+                !isGenerating && (await accept({ suggestion }))
               }
-              side="top"
+              disabled={isGenerating}
+              data-suggestion-id={suggestion.id}
+              data-suggestion-index={index}
             >
-              <button
-                className={cn(
-                  "py-2 px-2.5 rounded-2xl text-xs transition-colors",
-                  "border border-flat",
-                  getSuggestionButtonClassName({
-                    isGenerating,
-                    isSelected: selectedSuggestionId === suggestion.id,
-                  }),
-                )}
-                onClick={async () =>
-                  !isGenerating && (await accept({ suggestion }))
-                }
-                disabled={isGenerating}
-                data-suggestion-id={suggestion.id}
-                data-suggestion-index={index}
-              >
-                <span className="font-medium">{suggestion.title}</span>
-              </button>
-            </Tooltip>
-          ))
+              <span className="font-medium">{suggestion.title}</span>
+            </button>
+          </Tooltip>
+        ))
         : // Render placeholder buttons when no suggestions are available
-          placeholders.map((_, index) => (
-            <div
-              key={`placeholder-${index}`}
-              className="py-2 px-2.5 rounded-2xl text-xs border border-flat bg-muted/20 text-transparent animate-pulse"
-              data-placeholder-index={index}
-            >
-              <span className="invisible">Placeholder</span>
-            </div>
-          ))}
+        placeholders.map((_, index) => (
+          <div
+            key={`placeholder-${index}`}
+            className="py-2 px-2.5 rounded-2xl text-xs border border-flat bg-muted/20 text-transparent animate-pulse"
+            data-placeholder-index={index}
+          >
+            <span className="invisible">Placeholder</span>
+          </div>
+        ))}
     </div>
   );
 });

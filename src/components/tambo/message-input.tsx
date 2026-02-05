@@ -158,17 +158,17 @@ function useCombinedResourceList(
     () =>
       mcpResources
         ? (
-            mcpResources as {
-              resource: { uri: string; name?: string };
-            }[]
-          ).map((entry) => ({
-            // Use the full URI (already includes serverKey prefix from MCP hook)
-            // When inserted as @{id}, parseResourceReferences will strip serverKey before sending to backend
-            id: entry.resource.uri,
-            name: entry.resource.name ?? entry.resource.uri,
-            icon: React.createElement(AtSign, { className: "w-4 h-4" }),
-            componentData: { type: "mcp-resource", data: entry },
-          }))
+          mcpResources as {
+            resource: { uri: string; name?: string };
+          }[]
+        ).map((entry) => ({
+          // Use the full URI (already includes serverKey prefix from MCP hook)
+          // When inserted as @{id}, parseResourceReferences will strip serverKey before sending to backend
+          id: entry.resource.uri,
+          name: entry.resource.name ?? entry.resource.uri,
+          icon: React.createElement(AtSign, { className: "w-4 h-4" }),
+          componentData: { type: "mcp-resource", data: entry },
+        }))
         : [],
     [mcpResources],
   );
@@ -233,11 +233,11 @@ function useCombinedPromptList(
     () =>
       mcpPrompts
         ? (mcpPrompts as { prompt: { name: string } }[]).map((entry) => ({
-            id: `mcp-prompt:${entry.prompt.name}`,
-            name: entry.prompt.name,
-            icon: React.createElement(FileText, { className: "w-4 h-4" }),
-            text: "", // Text will be fetched when selected via useTamboMcpPrompt
-          }))
+          id: `mcp-prompt:${entry.prompt.name}`,
+          name: entry.prompt.name,
+          icon: React.createElement(FileText, { className: "w-4 h-4" }),
+          text: "", // Text will be fetched when selected via useTamboMcpPrompt
+        }))
         : [],
     [mcpPrompts],
   );
@@ -526,14 +526,24 @@ const MessageInputInternal = React.forwardRef<
         setDisplayValue(value);
         // On submit failure, also clear image error
         setImageError(null);
-        setSubmitError(
-          error instanceof Error
-            ? error.message
-            : "Failed to send message. Please try again.",
-        );
 
-        // Cancel the thread to reset loading state
-        await cancel();
+        // Agentic error handling
+        let errorMessage = "Failed to send message. Please try again.";
+        if (error instanceof Error) {
+          errorMessage = error.message;
+          if (errorMessage.toLowerCase().includes("input stream") || errorMessage.toLowerCase().includes("stream error")) {
+            errorMessage = "SYSTEM FAULT: INPUT_STREAM_ERROR // PLEASE RETRY";
+          }
+        }
+
+        setSubmitError(errorMessage);
+
+        // Cancel the thread to reset loading state - force await
+        try {
+          await cancel();
+        } catch (cancelErr) {
+          console.error("Failed to cancel thread on error:", cancelErr);
+        }
       } finally {
         setIsSubmitting(false);
       }
@@ -891,7 +901,7 @@ const MessageInputTextarea = ({
         resources={resourceItems}
         onSearchPrompts={setPromptSearch}
         prompts={promptItems}
-        onResourceSelect={onResourceSelect ?? (() => {})}
+        onResourceSelect={onResourceSelect ?? (() => { })}
         onPromptSelect={handlePromptSelect}
       />
     </div>
@@ -1034,7 +1044,7 @@ const MessageInputSubmitButton = React.forwardRef<
   };
 
   const buttonClasses = cn(
-    "w-10 h-10 bg-foreground text-background rounded-lg hover:bg-foreground/90 disabled:opacity-50 flex items-center justify-center enabled:cursor-pointer",
+    "p-2 rounded-md cursor-pointer hover:bg-muted disabled:opacity-50 text-foreground transition-colors flex items-center justify-center",
     className,
   );
 
