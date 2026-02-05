@@ -24,122 +24,18 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
+import { NewsDialog, type NewsArticle } from "@/components/news-dialog";
+import { ExternalLink } from "lucide-react";
 
-/**
- * Schema for crisis markers that Tambo can manipulate
- */
-export const crisisMarkerSchema = z.object({
-  id: z.string().describe("Unique identifier for the crisis event"),
-  title: z.string().describe("Title or name of the crisis event"),
-  description: z
-    .string()
-    .optional()
-    .describe("Detailed description of the crisis"),
-  latitude: z
-    .coerce.number()
-    .describe(
-      "Latitude coordinate of the crisis location. Can be a number or numeric string."
-    ),
-  longitude: z
-    .coerce.number()
-    .describe(
-      "Longitude coordinate of the crisis location. Can be a number or numeric string."
-    ),
-  category: z
-    .enum(["wildfire", "volcano", "earthquake", "flood", "storm", "news", "other"])
-    .describe(
-      "Category of the crisis event. Use 'news' for article markers from Tavily."
-    ),
-  severity: z
-    .enum(["low", "medium", "high", "critical"])
-    .optional()
-    .describe("Severity level of the crisis"),
-  date: z.string().optional().describe("Date of the crisis event"),
-  source: z.string().optional().describe("Data source for this crisis"),
-  url: z
-    .string()
-    .optional()
-    .describe(
-      "URL link to the primary source article for this crisis event (e.g. Tavily or NASA)."
-    ),
-  relatedNews: z
-    .array(
-      z.object({
-        id: z.string().describe("Stable identifier for the news article"),
-        title: z.string().describe("Headline or title of the news article"),
-        url: z
-          .string()
-          .optional()
-          .describe("URL to the full news article (if available)"),
-        source: z
-          .string()
-          .optional()
-          .describe("Name of the news outlet or data provider"),
-        snippet: z
-          .string()
-          .optional()
-          .describe("Short summary or snippet describing the article"),
-        publishedAt: z
-          .string()
-          .optional()
-          .describe("Published date/time in ISO 8601 format if known"),
-      })
-    )
-    .optional()
-    .describe(
-      "Optional list of local news articles related to this crisis, typically fetched from Tavily for the marker's location. Only populate for real crisis events (not generic regions or routes)."
-    ),
-});
-
-export type CrisisMarker = z.infer<typeof crisisMarkerSchema>;
+import {
+  crisisMarkerSchema,
+  LOCATION_PRESETS,
+  type CrisisMarker,
+} from "@/lib/markers";
 
 /**
  * Schema for the TacticalMap component props that Tambo AI can control
  */
-
-// Common location coordinates that Tambo can use for zooming
-export const LOCATION_PRESETS: Record<string, { lat: number; lng: number; zoom: number }> = {
-  // Major Cities
-  "new york": { lat: 40.7128, lng: -74.0060, zoom: 10 },
-  "los angeles": { lat: 34.0522, lng: -118.2437, zoom: 10 },
-  "chicago": { lat: 41.8781, lng: -87.6298, zoom: 10 },
-  "london": { lat: 51.5074, lng: -0.1278, zoom: 10 },
-  "paris": { lat: 48.8566, lng: 2.3522, zoom: 10 },
-  "tokyo": { lat: 35.6762, lng: 139.6503, zoom: 10 },
-  "sydney": { lat: -33.8688, lng: 151.2093, zoom: 10 },
-  "mumbai": { lat: 19.0760, lng: 72.8777, zoom: 10 },
-  "dubai": { lat: 25.2048, lng: 55.2708, zoom: 10 },
-  "singapore": { lat: 1.3521, lng: 103.8198, zoom: 11 },
-  "hong kong": { lat: 22.3193, lng: 114.1694, zoom: 11 },
-  "berlin": { lat: 52.5200, lng: 13.4050, zoom: 10 },
-  "moscow": { lat: 55.7558, lng: 37.6173, zoom: 10 },
-  "beijing": { lat: 39.9042, lng: 116.4074, zoom: 10 },
-  "san francisco": { lat: 37.7749, lng: -122.4194, zoom: 11 },
-  // Countries
-  "usa": { lat: 39.8283, lng: -98.5795, zoom: 4 },
-  "india": { lat: 20.5937, lng: 78.9629, zoom: 4 },
-  "china": { lat: 35.8617, lng: 104.1954, zoom: 4 },
-  "australia": { lat: -25.2744, lng: 133.7751, zoom: 4 },
-  "brazil": { lat: -14.2350, lng: -51.9253, zoom: 4 },
-  "russia": { lat: 61.5240, lng: 105.3188, zoom: 3 },
-  "japan": { lat: 36.2048, lng: 138.2529, zoom: 5 },
-  "germany": { lat: 51.1657, lng: 10.4515, zoom: 5 },
-  "france": { lat: 46.2276, lng: 2.2137, zoom: 5 },
-  "uk": { lat: 55.3781, lng: -3.4360, zoom: 5 },
-  "canada": { lat: 56.1304, lng: -106.3468, zoom: 3 },
-  "mexico": { lat: 23.6345, lng: -102.5528, zoom: 5 },
-  "italy": { lat: 41.8719, lng: 12.5674, zoom: 5 },
-  "spain": { lat: 40.4637, lng: -3.7492, zoom: 5 },
-  // Regions
-  "europe": { lat: 54.5260, lng: 15.2551, zoom: 3 },
-  "asia": { lat: 34.0479, lng: 100.6197, zoom: 3 },
-  "africa": { lat: -8.7832, lng: 34.5085, zoom: 3 },
-  "north america": { lat: 54.5260, lng: -105.2551, zoom: 3 },
-  "south america": { lat: -8.7832, lng: -55.4915, zoom: 3 },
-  "oceania": { lat: -22.7359, lng: 140.0188, zoom: 3 },
-  "middle east": { lat: 29.2985, lng: 42.5510, zoom: 4 },
-  "california": { lat: 36.7783, lng: -119.4179, zoom: 6 },
-};
 
 // Route point schema for drawing routes on the map
 export const routePointSchema = z.object({
@@ -528,16 +424,33 @@ function markersToGeoJSON(markers: CrisisMarker[]): GeoJSON.FeatureCollection<Ge
  * - Responsive popups with crisis details
  */
 export function TacticalMap({
-  markers = [],
-  routes = [],
-  centerLongitude = 0,
-  centerLatitude = 20,
-  zoomLevel = 2,
+  markers,
+  routes,
+  centerLongitude,
+  centerLatitude,
+  zoomLevel,
   enableClustering,
-  flyToMarkers, // Default will be set based on markers presence
+  flyToMarkers,
   regionName,
-  highlightRegions = [],
+  highlightRegions,
 }: TacticalMapProps) {
+  // Apply defaults safely - handle null, undefined, and empty values
+  const safeMarkers = Array.isArray(markers) ? markers : [];
+  const safeRoutes = Array.isArray(routes) ? routes : [];
+  const safeCenterLongitude = typeof centerLongitude === 'number' ? centerLongitude : 0;
+  const safeCenterLatitude = typeof centerLatitude === 'number' ? centerLatitude : 20;
+  const safeZoomLevel = typeof zoomLevel === 'number' ? zoomLevel : 2;
+  const safeHighlightRegions = Array.isArray(highlightRegions) ? highlightRegions : [];
+  const safeRegionName = typeof regionName === 'string' && regionName.length > 0 ? regionName : undefined;
+
+  // Debug logging
+  console.log('TacticalMap received:', {
+    markersCount: safeMarkers.length,
+    flyToMarkers,
+    enableClustering,
+    regionName: safeRegionName,
+  });
+
   const mapRef = useRef<MapRef>(null);
   const [clusterPopup, setClusterPopup] = useState<{
     longitude: number;
@@ -545,11 +458,68 @@ export function TacticalMap({
     properties: Record<string, any>;
   } | null>(null);
 
+  const [newsDialogState, setNewsDialogState] = useState<{
+    open: boolean;
+    title: string;
+    articles: NewsArticle[];
+    mainArticle?: {
+      title: string;
+      description?: string;
+      url?: string;
+      source?: string;
+      date?: string;
+      image?: string;
+    };
+  }>({
+    open: false,
+    title: "",
+    articles: [],
+  });
+
+  // Handler to open news modal from marker
+  const openNewsModal = (marker: CrisisMarker) => {
+    // Safely handle relatedNews - it might be null, undefined, or not an array
+    const relatedNewsArray = Array.isArray(marker.relatedNews) ? marker.relatedNews : [];
+    
+    const articles: NewsArticle[] = relatedNewsArray.map((item) => ({
+      id: item.id,
+      title: item.title,
+      url: item.url,
+      source: item.source,
+      snippet: item.snippet,
+      publishedAt: item.publishedAt,
+      image: item.image,
+    }));
+
+    // If no related news, create one from the marker itself
+    if (articles.length === 0) {
+      articles.push({
+        id: marker.id,
+        title: marker.title,
+        url: marker.url,
+        source: marker.source,
+        snippet: marker.description,
+        publishedAt: marker.date,
+      });
+    }
+
+    setNewsDialogState({
+      open: true,
+      title: marker.title,
+      articles,
+      mainArticle: {
+        title: marker.title,
+        description: marker.description,
+        url: marker.url,
+        source: marker.source,
+        date: marker.date,
+      },
+    });
+  };
+
   // Normalize and filter out invalid markers to prevent runtime errors.
   // Limit to 20 markers max for performance and clarity.
-  const normalizedMarkers = (markers || []) as CrisisMarker[];
-
-  const filteredMarkers = normalizedMarkers.filter(isValidMarker);
+  const filteredMarkers = safeMarkers.filter(isValidMarker);
   const validMarkers = filteredMarkers.slice(0, 20);
 
   if (validMarkers.length > 0) {
@@ -560,12 +530,12 @@ export function TacticalMap({
   }
 
   // Optional region highlight when we only have a coarse location string (Tavily-style)
-  const regionFromProp = resolveRegionFromName(regionName);
-  const regionsToHighlight =
-    highlightRegions.length > 0
-      ? highlightRegions
-      : !validMarkers.length && regionName
-        ? [regionName]
+  const regionFromProp = resolveRegionFromName(safeRegionName);
+  const regionsToHighlight: string[] =
+    safeHighlightRegions.length > 0
+      ? safeHighlightRegions
+      : !validMarkers.length && safeRegionName
+        ? [safeRegionName]
         : [];
 
   // Determine if clustering should be used.
@@ -665,9 +635,9 @@ export function TacticalMap({
         center={
           regionFromProp != null
             ? [regionFromProp.lng, regionFromProp.lat]
-            : [centerLongitude, centerLatitude]
+            : [safeCenterLongitude, safeCenterLatitude]
         }
-        zoom={regionFromProp != null ? regionFromProp.zoom : zoomLevel}
+        zoom={regionFromProp != null ? regionFromProp.zoom : safeZoomLevel}
         minZoom={1.5}
         maxZoom={18}
       >
@@ -736,97 +706,40 @@ export function TacticalMap({
               </MarkerContent>
 
               <MarkerPopup closeButton>
-                <div className="glass-card min-w-[260px] max-w-[320px] rounded-lg p-4 text-sm backdrop-blur-xl">
-                  <div className="flex items-start gap-3">
+                <div className="glass-card min-w-[220px] max-w-[280px] rounded-lg p-3 text-sm backdrop-blur-xl">
+                  {/* Compact header with category indicator */}
+                  <div className="flex items-start gap-2">
                     <div
                       className={cn(
-                        "mt-1 h-2 w-2 shrink-0 rounded-full shadow-[0_0_10px_currentColor]",
+                        "mt-1 h-2.5 w-2.5 shrink-0 rounded-full shadow-[0_0_8px_currentColor]",
                         getMarkerColor(marker.category).replace('bg-', 'text-')
                       )}
                       style={{ backgroundColor: 'currentColor' }}
                     />
-                    <div className="flex-1 space-y-1">
-                      <h3 className="font-medium leading-none tracking-tight text-foreground">
+                    <div className="flex-1 min-w-0">
+                      <span className="rounded-full border border-border bg-muted/50 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
+                        {marker.category}
+                      </span>
+                      <h3 className="mt-1.5 font-medium leading-snug tracking-tight text-foreground line-clamp-2">
                         {marker.title}
                       </h3>
-
-                      <div className="flex flex-wrap items-center gap-1.5 py-1">
-                        <span className="rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                          {marker.category}
-                        </span>
-                        {marker.severity && (
-                          <span
-                            className={cn(
-                              "rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-white bg-opacity-80 backdrop-blur-sm",
-                              getSeverityColor(marker.severity)
-                            )}
-                          >
-                            {marker.severity}
-                          </span>
-                        )}
-                      </div>
-
-                      {marker.description && (
-                        <p className="line-clamp-3 text-xs leading-relaxed text-muted-foreground">
-                          {marker.description}
+                      {marker.source && (
+                        <p className="mt-1 text-[10px] text-muted-foreground/70">
+                          Via {marker.source}
                         </p>
                       )}
-
-                      <div className="mt-2 flex items-center gap-3 text-[10px] text-muted-foreground/70">
-                        {marker.date && <span>{marker.date}</span>}
-                        {marker.source && <span>Via {marker.source}</span>}
-                      </div>
                     </div>
                   </div>
 
-                  {marker.relatedNews && marker.relatedNews.length > 0 && (
-                    <div className="mt-3 space-y-2 border-t border-white/5 pt-3">
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        Local Updates
-                      </p>
-                      <div className="space-y-1.5">
-                        {marker.relatedNews.slice(0, 3).map((item) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            className="w-full rounded-md border border-border/60 bg-card/60 p-2 text-left text-xs hover:bg-accent/60"
-                            onClick={() => {
-                              if (item.url) {
-                                window.open(item.url, "_blank", "noopener,noreferrer");
-                              }
-                            }}
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <span className="font-medium line-clamp-2">
-                                {item.title}
-                              </span>
-                              {item.source && (
-                                <span className="shrink-0 text-[10px] text-muted-foreground">
-                                  {item.source}
-                                </span>
-                              )}
-                            </div>
-                            {item.snippet && (
-                              <p className="mt-1 text-[11px] text-muted-foreground line-clamp-3">
-                                {item.snippet}
-                              </p>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {!marker.relatedNews?.length && marker.url && (
-                    <a
-                      href={marker.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-2 inline-flex items-center gap-1 text-xs text-cyan-400 transition-colors hover:text-cyan-300 hover:underline"
-                    >
-                      Read full article →
-                    </a>
-                  )}
+                  {/* Read button - opens modal with full details */}
+                  <button
+                    type="button"
+                    onClick={() => openNewsModal(marker)}
+                    className="mt-3 w-full rounded-md border border-emerald-500/50 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-400 transition-all hover:bg-emerald-500/20 hover:border-emerald-500 flex items-center justify-center gap-2"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Read More
+                  </button>
                 </div>
               </MarkerPopup>
             </MapMarker>
@@ -850,72 +763,57 @@ export function TacticalMap({
             closeButton
             onClose={() => setClusterPopup(null)}
           >
-            <div className="min-w-[220px] max-w-[340px] space-y-3">
+            <div className="min-w-[220px] max-w-[280px] space-y-3">
+              {/* Compact header with category indicator */}
               <div className="flex items-start gap-2">
-                <span className="mt-1 inline-flex h-2.5 w-2.5 rounded-full bg-amber-400" />
-                <div className="flex-1">
-                  <h3 className="text-sm font-semibold leading-snug">
+                <div
+                  className={cn(
+                    "mt-1 h-2.5 w-2.5 shrink-0 rounded-full shadow-[0_0_8px_currentColor]",
+                    getMarkerColor(clusterPopup.properties.category || "other").replace('bg-', 'text-')
+                  )}
+                  style={{ backgroundColor: 'currentColor' }}
+                />
+                <div className="flex-1 min-w-0">
+                  <span className="rounded-full border border-border bg-muted/50 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
+                    {clusterPopup.properties.category || "event"}
+                  </span>
+                  <h3 className="mt-1.5 font-medium leading-snug tracking-tight text-foreground line-clamp-2">
                     {clusterPopup.properties.title ?? "Crisis event"}
                   </h3>
-                  {clusterPopup.properties.category && (
-                    <p className="mt-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">
-                      {clusterPopup.properties.category}
+                  {clusterPopup.properties.source && (
+                    <p className="mt-1 text-[10px] text-muted-foreground/70">
+                      Via {clusterPopup.properties.source}
                     </p>
                   )}
                 </div>
               </div>
 
-              {clusterPopup.properties.description && (
-                <p className="text-xs text-muted-foreground leading-snug">
-                  {clusterPopup.properties.description}
-                </p>
-              )}
-
-              {Array.isArray(clusterPopup.properties.relatedNews) &&
-                clusterPopup.properties.relatedNews.length > 0 && (
-                  <Card className="border-muted/60 bg-background/80">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-xs font-semibold">
-                        Local news for this area
-                      </CardTitle>
-                      <CardDescription className="text-[11px]">
-                        Articles sourced via Tavily for this cluster.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-2 pt-0">
-                      {clusterPopup.properties.relatedNews
-                        .slice(0, 3)
-                        .map((item: any) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            className="w-full rounded-md border border-border/60 bg-card/60 p-2 text-left text-xs hover:bg-accent/60"
-                            onClick={() => {
-                              if (item.url) {
-                                window.open(item.url, "_blank", "noopener,noreferrer");
-                              }
-                            }}
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <span className="font-medium line-clamp-2">
-                                {item.title}
-                              </span>
-                              {item.source && (
-                                <span className="shrink-0 text-[10px] text-muted-foreground">
-                                  {item.source}
-                                </span>
-                              )}
-                            </div>
-                            {item.snippet && (
-                              <p className="mt-1 text-[11px] text-muted-foreground line-clamp-3">
-                                {item.snippet}
-                              </p>
-                            )}
-                          </button>
-                        ))}
-                    </CardContent>
-                  </Card>
-                )}
+              {/* Read button - opens modal with full details */}
+              <button
+                type="button"
+                onClick={() => {
+                  // Create a marker-like object from cluster popup properties
+                  const markerData: CrisisMarker = {
+                    id: clusterPopup.properties.id || `cluster-${Date.now()}`,
+                    title: clusterPopup.properties.title || "News",
+                    description: clusterPopup.properties.description,
+                    latitude: clusterPopup.latitude,
+                    longitude: clusterPopup.longitude,
+                    category: clusterPopup.properties.category || "news",
+                    severity: clusterPopup.properties.severity,
+                    date: clusterPopup.properties.date,
+                    source: clusterPopup.properties.source,
+                    url: clusterPopup.properties.url,
+                    relatedNews: clusterPopup.properties.relatedNews,
+                  };
+                  openNewsModal(markerData);
+                  setClusterPopup(null);
+                }}
+                className="w-full rounded-md border border-emerald-500/50 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-400 transition-all hover:bg-emerald-500/20 hover:border-emerald-500 flex items-center justify-center gap-2"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                Read More
+              </button>
             </div>
           </MapPopup>
         )}
@@ -968,6 +866,14 @@ export function TacticalMap({
           </div>
         );
       })()}
+
+      {/* News Dialog Modal - opens when clicking "Read More" on a marker */}
+      <NewsDialog
+        isOpen={newsDialogState.open}
+        onClose={() => setNewsDialogState({ ...newsDialogState, open: false })}
+        title={newsDialogState.title}
+        articles={newsDialogState.articles}
+      />
     </div>
   );
 }
