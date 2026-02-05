@@ -2,9 +2,10 @@
 
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ExternalLink, Calendar, MapPin } from "lucide-react";
+import { X, ExternalLink, Calendar, Newspaper, Globe, Clock } from "lucide-react";
 import React from "react";
 import { createPortal } from "react-dom";
+import { Button } from "@/components/ui/button";
 
 export interface NewsArticle {
     id: string;
@@ -44,7 +45,7 @@ export const NewsDialog = ({
 
         if (isOpen) {
             document.addEventListener("keydown", handleEscapeKey);
-            document.body.style.overflow = "hidden"; // Prevent scrolling
+            document.body.style.overflow = "hidden";
         }
 
         return () => {
@@ -61,13 +62,16 @@ export const NewsDialog = ({
         }
     };
 
+    // Get the main article (first one)
+    const mainArticle = articles[0];
+
     const modalContent = (
         <AnimatePresence>
             {isOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center">
                     {/* Backdrop */}
                     <motion.div
-                        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
@@ -77,105 +81,161 @@ export const NewsDialog = ({
                     {/* Modal */}
                     <motion.div
                         className={cn(
-                            "relative bg-card border border-border rounded-lg shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col m-4",
+                            "relative bg-card border border-border rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col m-4 overflow-hidden",
                             className
                         )}
-                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                        initial={{ opacity: 0, scale: 0.95, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                        transition={{ duration: 0.2 }}
+                        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                        transition={{ duration: 0.2, ease: "easeOut" }}
                     >
-                        {/* Header */}
-                        <div className="flex items-center justify-between p-4 border-b border-border bg-muted/20">
-                            <div className="flex items-center gap-2">
-                                <MapPin className="w-5 h-5 text-emerald-500" />
-                                <h2 className="text-lg font-semibold truncate pr-4">{title}</h2>
+                        {/* Close Button */}
+                        <button
+                            onClick={onClose}
+                            className="absolute top-3 right-3 z-10 p-2 bg-background/80 hover:bg-muted rounded-full transition-colors backdrop-blur-sm"
+                            aria-label="Close"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+
+                        {articles.length === 0 ? (
+                            <div className="p-8 text-center">
+                                <Newspaper className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
+                                <p className="text-muted-foreground">No article details available.</p>
                             </div>
-                            <button
-                                onClick={onClose}
-                                className="p-2 hover:bg-muted rounded-full transition-colors"
-                                aria-label="Close"
-                            >
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
+                        ) : (
+                            <>
+                                {/* Hero Image */}
+                                {mainArticle?.image && (
+                                    <div className="relative w-full h-48 bg-muted overflow-hidden">
+                                        <img
+                                            src={mainArticle.image}
+                                            alt=""
+                                            className="w-full h-full object-cover"
+                                            loading="lazy"
+                                            onError={(e) => {
+                                                (e.target as HTMLImageElement).style.display = "none";
+                                            }}
+                                        />
+                                        <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent" />
+                                    </div>
+                                )}
 
-                        {/* Content */}
-                        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                            {articles.length === 0 ? (
-                                <p className="text-muted-foreground text-center py-8">No articles found.</p>
-                            ) : (
-                                articles.map((article) => (
-                                    <div
-                                        key={article.id}
-                                        className="group relative bg-muted/30 border border-border/50 rounded-lg p-4 hover:bg-muted/50 hover:border-border transition-all"
-                                    >
-                                        <div className="flex gap-4">
-                                            {/* Thumbnail Image */}
-                                            {article.image && (
-                                                <div className="hidden sm:block w-24 h-24 shrink-0 rounded-md overflow-hidden bg-muted">
-                                                    <img
-                                                        src={article.image}
-                                                        alt=""
-                                                        className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                                                        loading="lazy"
-                                                    />
-                                                </div>
-                                            )}
+                                {/* Content */}
+                                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                                    {/* Category Badge */}
+                                    <div className="flex items-center gap-2">
+                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-xs font-medium">
+                                            <Newspaper className="w-3 h-3" />
+                                            NEWS
+                                        </span>
+                                    </div>
 
-                                            <div className="flex-1 space-y-2 min-w-0">
-                                                <h3 className="font-medium text-foreground leading-snug">
+                                    {/* Title */}
+                                    <h2 className="text-xl font-bold leading-tight text-foreground">
+                                        {title}
+                                    </h2>
+
+                                    {/* Meta Info */}
+                                    <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                                        {mainArticle?.source && (
+                                            <span className="flex items-center gap-1.5">
+                                                <Globe className="w-4 h-4 text-emerald-500" />
+                                                <span className="font-medium">{mainArticle.source}</span>
+                                            </span>
+                                        )}
+                                        {mainArticle?.publishedAt && (
+                                            <span className="flex items-center gap-1.5">
+                                                <Clock className="w-4 h-4" />
+                                                {new Date(mainArticle.publishedAt).toLocaleDateString("en-US", {
+                                                    year: "numeric",
+                                                    month: "long",
+                                                    day: "numeric",
+                                                })}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* Description/Snippet */}
+                                    {mainArticle?.snippet && (
+                                        <div className="pt-2">
+                                            <p className="text-muted-foreground leading-relaxed">
+                                                {mainArticle.snippet}
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {/* Read Full Article Button */}
+                                    {mainArticle?.url && (
+                                        <div className="pt-4">
+                                            <a
+                                                href={mainArticle.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="w-full"
+                                            >
+                                                <Button 
+                                                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-3 rounded-lg flex items-center justify-center gap-2 transition-all hover:scale-[1.02]"
+                                                    size="lg"
+                                                >
+                                                    <ExternalLink className="w-4 h-4" />
+                                                    Read Full Article
+                                                </Button>
+                                            </a>
+                                        </div>
+                                    )}
+
+                                    {/* Additional Articles (if more than one) */}
+                                    {articles.length > 1 && (
+                                        <div className="pt-4 border-t border-border mt-4">
+                                            <h3 className="text-sm font-semibold text-muted-foreground mb-3">
+                                                Related Articles
+                                            </h3>
+                                            <div className="space-y-2">
+                                                {articles.slice(1).map((article) => (
                                                     <a
+                                                        key={article.id}
                                                         href={article.url}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
-                                                        className="hover:text-emerald-500 transition-colors block"
+                                                        className="block p-3 rounded-lg bg-muted/30 border border-border/50 hover:bg-muted/50 hover:border-emerald-500/30 transition-all"
                                                     >
-                                                        {article.title}
+                                                        <div className="flex items-start gap-3">
+                                                            {article.image && (
+                                                                <div className="w-12 h-12 shrink-0 rounded overflow-hidden bg-muted">
+                                                                    <img
+                                                                        src={article.image}
+                                                                        alt=""
+                                                                        className="w-full h-full object-cover"
+                                                                        loading="lazy"
+                                                                    />
+                                                                </div>
+                                                            )}
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="text-sm font-medium line-clamp-2 text-foreground">
+                                                                    {article.title}
+                                                                </p>
+                                                                {article.source && (
+                                                                    <p className="text-xs text-muted-foreground mt-1">
+                                                                        {article.source}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                            <ExternalLink className="w-4 h-4 text-muted-foreground shrink-0" />
+                                                        </div>
                                                     </a>
-                                                </h3>
-
-                                                {article.snippet && (
-                                                    <p className="text-sm text-muted-foreground line-clamp-2">
-                                                        {article.snippet}
-                                                    </p>
-                                                )}
-
-                                                <div className="flex items-center gap-4 text-xs text-muted-foreground/70 pt-1">
-                                                    {article.source && (
-                                                        <span className="font-medium text-foreground/80">{article.source}</span>
-                                                    )}
-                                                    {article.publishedAt && (
-                                                        <span className="flex items-center gap-1">
-                                                            <Calendar className="w-3 h-3" />
-                                                            {new Date(article.publishedAt).toLocaleDateString()}
-                                                        </span>
-                                                    )}
-                                                </div>
+                                                ))}
                                             </div>
-
-
-                                            {article.url && (
-                                                <a
-                                                    href={article.url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="p-2 bg-background border border-border rounded-md opacity-0 group-hover:opacity-100 transition-opacity hover:text-emerald-500 hover:border-emerald-500"
-                                                    title="Read detailed article"
-                                                >
-                                                    <ExternalLink className="w-4 h-4" />
-                                                </a>
-                                            )}
                                         </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
+                                    )}
+                                </div>
 
-                        {/* Footer */}
-                        <div className="p-4 border-t border-border bg-muted/10 text-xs text-center text-muted-foreground">
-                            News data provided by GNews API
-                        </div>
+                                {/* Footer */}
+                                <div className="px-6 py-3 border-t border-border bg-muted/20 text-xs text-center text-muted-foreground">
+                                    News data provided by GNews API
+                                </div>
+                            </>
+                        )}
                     </motion.div>
                 </div>
             )}

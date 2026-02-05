@@ -11,6 +11,7 @@
 import { Graph, graphSchema } from "@/components/tambo/graph";
 import { DataCard, dataCardSchema } from "@/components/ui/card-data";
 import { TacticalMap, tacticalMapSchema } from "@/components/tactical-map";
+import { NewsCard, newsCardSchema } from "@/components/tambo/news-card";
 import { TamboTool, TamboComponent } from "@tambo-ai/react";
 
 // Re-export tools from dedicated server-safe file
@@ -94,5 +95,26 @@ EXAMPLE:
     component: DataCard,
     propsSchema: dataCardSchema,
   },
-  // Add more components here
+  {
+    name: "NewsCard",
+    description: `REQUIRED: Display news articles in the chat after fetching news with getGNews tool.
+
+ALWAYS render this component when showing news to users. It displays clickable article cards with thumbnails, titles, descriptions, and links.
+
+PROPS:
+- articles: Array of {id, title, description, url, source, publishedAt, image}
+- title: Header text (e.g. "Top Headlines from India")
+- location: Location context
+
+EXAMPLE:
+{
+  articles: [
+    {id: "1", title: "Breaking News", description: "Details...", url: "https://...", source: "CNN", publishedAt: "2024-01-15", image: "https://..."}
+  ],
+  title: "Latest News",
+  location: "India"
+}`,
+    component: NewsCard,
+    propsSchema: newsCardSchema,
+  },
 ];

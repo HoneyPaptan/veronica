@@ -141,11 +141,30 @@ export const tools: TamboTool[] = [
     },
     {
         name: "getGNews",
-        description: "Fetch latest news articles about a topic or location. Use this when the user asks for news, updates, or what's happening in a specific area. If a location is provided, the news will be relevant to that place.",
+        description: `Fetch latest news articles from GNews API. Use this when the user asks for news, headlines, updates, or what's happening in a specific area.
+
+USAGE:
+- For general news: query="top news" or "headlines"
+- For topic-specific: query="wildfires", "politics", "technology"
+- For location-specific: Provide location parameter (e.g. "California", "India")
+
+AFTER GETTING RESULTS - YOU MUST DO THESE 2 THINGS:
+
+1. RENDER TacticalMap component with the markers:
+   TacticalMap props: { markers: [returned markers], flyToMarkers: true, enableClustering: false }
+
+2. RENDER NewsCard component in chat with articles:
+   NewsCard props: { 
+     articles: markers.map(m => ({id: m.id, title: m.title, description: m.description, url: m.url, source: m.source, publishedAt: m.date, image: m.image})),
+     title: "News Headlines",
+     location: "[location name]"
+   }
+
+DO NOT just output raw JSON - you MUST render both TacticalMap and NewsCard components!`,
         tool: searchGNews,
         inputSchema: z.object({
-            query: z.string().describe("Topic to search for (e.g. 'wildfires', 'floods', 'politics')"),
-            location: z.string().optional().describe("Location name to filter news (e.g. 'California', 'India'). This helps place markers on the map.")
+            query: z.string().describe("Search query (e.g. 'top news', 'headlines', 'wildfires')"),
+            location: z.string().optional().describe("Location name (e.g. 'California', 'India', 'USA')")
         }),
         outputSchema: z.array(crisisMarkerSchema)
     },
