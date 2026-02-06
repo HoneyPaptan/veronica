@@ -23,62 +23,62 @@ export function AsciiLoader({
     onRetry,
     ...props
 }: AsciiLoaderProps) {
-    const [frame, setFrame] = useState(0);
-
-    useEffect(() => {
-        // Don't animate if in error state
-        if (isError) return;
-        
-        const interval = setInterval(() => {
-            setFrame((f) => f + 1);
-        }, 100);
-        return () => clearInterval(interval);
-    }, [isError]);
-
-    const spinners = ["|", "/", "-", "\\"];
-    // A growing bar that resets: [=     ] -> [==    ] ...
-    const getBar = (f: number) => {
-        const width = 5;
-        const pos = f % (width + 1);
-        const fill = "=".repeat(pos);
-        const empty = " ".repeat(width - pos);
-        return `[${fill}${empty}]`;
-    };
-
-    const getDots = (f: number) => ".".repeat((f % 3) + 1);
-
-    // Error state - show static error indicator
+    // Error state - show modern error indicator
     if (isError) {
         return (
-            <div className={cn("font-mono text-xs flex flex-col gap-2", className)} {...props}>
+            <div className={cn("text-xs flex flex-col gap-2 p-2 rounded-md bg-red-500/5 text-red-600 border border-red-500/20", className)} {...props}>
                 <div className="flex items-center gap-2">
-                    <span className="text-red-500">[= ERROR]</span>
-                    <span className="text-red-500 uppercase tracking-wider">
-                        {errorMessage || "ERROR"}
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="w-4 h-4"
+                    >
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    <span className="font-medium">
+                        {errorMessage || "An error occurred"}
                     </span>
                 </div>
                 {onRetry && (
                     <button
                         type="button"
                         onClick={onRetry}
-                        className="mt-1 px-3 py-1.5 text-xs font-medium text-red-400 border border-red-500/50 rounded-md bg-red-500/10 hover:bg-red-500/20 hover:border-red-500 transition-all w-fit"
+                        className="self-start mt-1 px-3 py-1.5 text-xs font-medium text-red-600 border border-red-200 rounded-md bg-white hover:bg-red-50 transition-colors shadow-sm"
                     >
-                        ↻ Try Again
+                        Try Again
                     </button>
                 )}
             </div>
         );
     }
 
-    let animation = "";
-    if (variant === "spinner") animation = spinners[frame % spinners.length];
-    else if (variant === "bar") animation = getBar(frame);
-    else if (variant === "dots") animation = getDots(frame);
-
+    // Loading state - show modern spinner
     return (
-        <div className={cn("font-mono text-xs flex items-center gap-2", className)} {...props}>
-            <span className="text-emerald-500">{animation}</span>
-            {text && <span className="opacity-70 uppercase tracking-wider">{text}</span>}
+        <div className={cn("text-xs flex items-center gap-2 text-muted-foreground", className)} {...props}>
+            <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-3 h-3 animate-spin"
+            >
+                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+            </svg>
+            {text && <span className="font-medium animate-pulse">{text}</span>}
         </div>
     );
 }

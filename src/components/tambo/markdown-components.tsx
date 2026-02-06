@@ -303,6 +303,19 @@ export const createMarkdownComponents = (): Record<
   hr: () => <hr className="my-4 border-muted" />,
 
   /**
+   * Image component with styling
+   * Ensures images don't overflow and have rounded corners
+   */
+  img: ({ src, alt }: { src?: string; alt?: string }) => (
+    <img
+      src={src}
+      alt={alt}
+      className="max-w-full h-auto rounded-md shadow-sm border border-border my-2"
+      loading="lazy"
+    />
+  ),
+
+  /**
    * Table container component
    * Handles overflow for wide tables with proper spacing
    */
