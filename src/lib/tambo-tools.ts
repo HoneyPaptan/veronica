@@ -147,24 +147,36 @@ USAGE:
 - For general news: query="top news" or "headlines"
 - For topic-specific: query="wildfires", "politics", "technology"
 - For location-specific: Provide location parameter (e.g. "California", "India")
+- For map-selected locations: ALWAYS pass latitude and longitude parameters!
 
-AFTER GETTING RESULTS - YOU MUST DO THESE 2 THINGS:
+CRITICAL - COORDINATE EXTRACTION:
+When the user query contains coordinates like "31.3176, 75.4645" or "coordinates 31.3176, 75.4645":
+1. Extract the FIRST number as latitude (e.g. 31.3176)
+2. Extract the SECOND number as longitude (e.g. 75.4645)
+3. Pass these as the latitude and longitude parameters
 
-1. RENDER TacticalMap component with the markers:
-   TacticalMap props: { markers: [returned markers], flyToMarkers: true, enableClustering: false }
+Example: "Get news for coordinates 31.3176, 75.4645 (Jalandhar)"
+-> Call with: { query: "news", location: "Jalandhar", latitude: 31.3176, longitude: 75.4645 }
 
-2. RENDER NewsCard component in chat with articles:
-   NewsCard props: { 
-     articles: markers.map(m => ({id: m.id, title: m.title, description: m.description, url: m.url, source: m.source, publishedAt: m.date, image: m.image})),
-     title: "News Headlines",
-     location: "[location name]"
-   }
+AFTER GETTING RESULTS - CRITICAL STEPS:
 
-DO NOT just output raw JSON - you MUST render both TacticalMap and NewsCard components!`,
+1. UPDATE TacticalMap with the EXACT markers returned by this tool:
+   - DO NOT modify the marker coordinates!
+   - Pass the markers array DIRECTLY to TacticalMap
+   - TacticalMap props: { markers: <returned_markers>, flyToMarkers: true, enableClustering: false }
+
+2. RENDER NewsCard component in chat:
+   - Extract article info from the markers' relatedNews field
+   - NewsCard props: { articles: [...], title: "News Headlines", location: "[location]" }
+
+IMPORTANT: The markers returned by this tool already have the correct coordinates. 
+DO NOT create new markers or change their latitude/longitude values!`,
         tool: searchGNews,
         inputSchema: z.object({
             query: z.string().describe("Search query (e.g. 'top news', 'headlines', 'wildfires')"),
-            location: z.string().optional().describe("Location name (e.g. 'California', 'India', 'USA')")
+            location: z.string().optional().describe("Location name (e.g. 'California', 'India', 'Jalandhar')"),
+            latitude: z.number().optional().describe("REQUIRED for map selections: Exact latitude from user's selected coordinates"),
+            longitude: z.number().optional().describe("REQUIRED for map selections: Exact longitude from user's selected coordinates")
         }),
         outputSchema: z.array(crisisMarkerSchema)
     },

@@ -25,13 +25,14 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { NewsDialog, type NewsArticle } from "@/components/news-dialog";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, MousePointer2, X, MapPin, Crosshair } from "lucide-react";
 
 import {
   crisisMarkerSchema,
   LOCATION_PRESETS,
   type CrisisMarker,
 } from "@/lib/markers";
+import { useMapChatContext } from "@/components/veronica-content";
 
 /**
  * Schema for the TacticalMap component props that Tambo AI can control
@@ -360,6 +361,176 @@ function MapViewModeToggle() {
   );
 }
 
+/**
+ * Selected location info for the select mode feature
+ */
+export interface SelectedLocation {
+  latitude: number;
+  longitude: number;
+  placeName?: string;
+}
+
+/**
+ * SelectModeToggle - Button to enable/disable location selection mode
+ */
+function SelectModeToggle({ 
+  isSelectMode, 
+  onToggle 
+}: { 
+  isSelectMode: boolean; 
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={cn(
+        "pointer-events-auto absolute right-4 top-4 z-20 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium shadow-lg backdrop-blur-sm transition-all",
+        isSelectMode
+          ? "border-cyan-500 bg-cyan-500/20 text-cyan-400 ring-2 ring-cyan-500/30"
+          : "border-border bg-background/80 text-foreground hover:bg-accent/70"
+      )}
+      title={isSelectMode ? "Click anywhere on the map to select a location" : "Enable location selection mode"}
+    >
+      <Crosshair className={cn("h-4 w-4", isSelectMode && "animate-pulse")} />
+      {isSelectMode ? "Select Mode ON" : "Select Location"}
+    </button>
+  );
+}
+
+/**
+ * SelectedLocationPopup - Shows info about the selected location with action buttons
+ */
+function SelectedLocationPopup({
+  location,
+  onClose,
+  onSendToChat,
+}: {
+  location: SelectedLocation;
+  onClose: () => void;
+  onSendToChat: (query: string) => void;
+}) {
+  const quickActions = [
+    { label: "Get News", query: `Get news for this location at coordinates ${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}${location.placeName ? ` (${location.placeName})` : ''}` },
+    { label: "Check Wildfires", query: `Show wildfires near coordinates ${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}${location.placeName ? ` (${location.placeName})` : ''}` },
+    { label: "Weather Info", query: `What's the weather at ${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}${location.placeName ? ` (${location.placeName})` : ''}?` },
+  ];
+
+  return (
+    <div className="glass-card min-w-[260px] max-w-[320px] rounded-lg p-4 text-sm backdrop-blur-xl">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-cyan-500/20 text-cyan-400">
+            <MapPin className="h-4 w-4" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-foreground">Selected Location</h3>
+            {location.placeName && (
+              <p className="text-xs text-muted-foreground">{location.placeName}</p>
+            )}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-full p-1 hover:bg-muted transition-colors"
+        >
+          <X className="h-4 w-4 text-muted-foreground" />
+        </button>
+      </div>
+
+      {/* Coordinates */}
+      <div className="mb-4 rounded-md bg-muted/50 p-2 font-mono text-xs">
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Lat:</span>
+          <span className="text-foreground">{location.latitude.toFixed(6)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Lng:</span>
+          <span className="text-foreground">{location.longitude.toFixed(6)}</span>
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="space-y-2">
+        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Quick Actions</p>
+        <div className="flex flex-wrap gap-2">
+          {quickActions.map((action) => (
+            <button
+              key={action.label}
+              type="button"
+              onClick={() => onSendToChat(action.query)}
+              className="rounded-md border border-border bg-background/60 px-2.5 py-1.5 text-xs font-medium text-foreground transition-all hover:bg-accent hover:border-cyan-500/50 hover:text-cyan-400"
+            >
+              {action.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Custom Query Hint */}
+      <p className="mt-3 text-[10px] text-muted-foreground/70 text-center">
+        Or type your own query in the chat with this location
+      </p>
+    </div>
+  );
+}
+
+/**
+ * MapClickHandler - Handles map clicks when in select mode
+ */
+function MapClickHandler({
+  isSelectMode,
+  onLocationSelect,
+}: {
+  isSelectMode: boolean;
+  onLocationSelect: (location: SelectedLocation) => void;
+}) {
+  const { map, isLoaded } = useMap();
+
+  useEffect(() => {
+    if (!map || !isLoaded || !isSelectMode) return;
+
+    const handleClick = async (e: maplibregl.MapMouseEvent) => {
+      const { lng, lat } = e.lngLat;
+      
+      // Try to get place name via reverse geocoding (using Nominatim - free)
+      let placeName: string | undefined;
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10`,
+          { headers: { 'User-Agent': 'VeronicaApp/1.0' } }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          placeName = data.display_name?.split(',').slice(0, 3).join(',') || data.name;
+        }
+      } catch {
+        // Ignore geocoding errors - we'll just use coordinates
+      }
+
+      onLocationSelect({
+        latitude: lat,
+        longitude: lng,
+        placeName,
+      });
+    };
+
+    map.on('click', handleClick);
+
+    // Change cursor to crosshair when in select mode
+    map.getCanvas().style.cursor = 'crosshair';
+
+    return () => {
+      map.off('click', handleClick);
+      map.getCanvas().style.cursor = '';
+    };
+  }, [map, isLoaded, isSelectMode, onLocationSelect]);
+
+  return null;
+}
+
 function isValidMarker(marker: CrisisMarker): boolean {
   if (!marker) return false;
 
@@ -433,7 +604,13 @@ export function TacticalMap({
   flyToMarkers,
   regionName,
   highlightRegions,
-}: TacticalMapProps) {
+  // Internal props for select mode (passed from InteractableTacticalMap wrapper)
+  _isSelectMode,
+  _onLocationSelect,
+}: TacticalMapProps & {
+  _isSelectMode?: boolean;
+  _onLocationSelect?: (location: SelectedLocation) => void;
+}) {
   // Apply defaults safely - handle null, undefined, and empty values
   const safeMarkers = Array.isArray(markers) ? markers : [];
   const safeRoutes = Array.isArray(routes) ? routes : [];
@@ -446,9 +623,12 @@ export function TacticalMap({
   // Debug logging
   console.log('TacticalMap received:', {
     markersCount: safeMarkers.length,
+    markers: safeMarkers.slice(0, 2), // Log first 2 markers for debugging
     flyToMarkers,
     enableClustering,
     regionName: safeRegionName,
+    centerLatitude: safeCenterLatitude,
+    centerLongitude: safeCenterLongitude,
   });
 
   const mapRef = useRef<MapRef>(null);
@@ -521,6 +701,17 @@ export function TacticalMap({
   // Limit to 20 markers max for performance and clarity.
   const filteredMarkers = safeMarkers.filter(isValidMarker);
   const validMarkers = filteredMarkers.slice(0, 20);
+
+  // Debug: Log marker validation results
+  if (safeMarkers.length > 0) {
+    console.log('Marker validation:', {
+      received: safeMarkers.length,
+      valid: filteredMarkers.length,
+      displayed: validMarkers.length,
+      firstMarkerCoords: validMarkers[0] ? { lat: validMarkers[0].latitude, lng: validMarkers[0].longitude } : 'none',
+      invalidMarkers: safeMarkers.filter(m => !isValidMarker(m)).map(m => ({ id: m?.id, lat: (m as any)?.latitude, lng: (m as any)?.longitude }))
+    });
+  }
 
   if (validMarkers.length > 0) {
     console.info(
@@ -832,6 +1023,14 @@ export function TacticalMap({
               width={route.width || 4}
             />
           ))}
+
+        {/* Map click handler for select mode - must be inside Map to access context */}
+        {_isSelectMode && _onLocationSelect && (
+          <MapClickHandler
+            isSelectMode={_isSelectMode}
+            onLocationSelect={_onLocationSelect}
+          />
+        )}
       </Map>
 
       {/* Crisis counter overlay - only show for actual crisis events, not routes */}
@@ -879,16 +1078,272 @@ export function TacticalMap({
 }
 
 /**
+ * TacticalMapWithSelectMode - Wrapper that adds location selection functionality
+ * 
+ * This component wraps TacticalMap and adds:
+ * - Select Mode toggle button
+ * - Map click handling for location selection
+ * - Popup with quick actions for selected location
+ */
+export function TacticalMapWithSelectMode({
+  onLocationSelect,
+  ...props
+}: TacticalMapProps & {
+  onLocationSelect?: (location: SelectedLocation, query: string) => void;
+}) {
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
+
+  const handleLocationSelect = (location: SelectedLocation) => {
+    setSelectedLocation(location);
+    // Don't auto-disable select mode so user can select multiple locations
+  };
+
+  const handleSendToChat = (query: string) => {
+    if (selectedLocation && onLocationSelect) {
+      onLocationSelect(selectedLocation, query);
+    }
+    // Close the popup after sending
+    setSelectedLocation(null);
+    setIsSelectMode(false);
+  };
+
+  const handleClosePopup = () => {
+    setSelectedLocation(null);
+  };
+
+  return (
+    <div className="relative w-full h-full">
+      <TacticalMap {...props} />
+      
+      {/* Select Mode Toggle Button */}
+      <SelectModeToggle 
+        isSelectMode={isSelectMode} 
+        onToggle={() => {
+          setIsSelectMode(!isSelectMode);
+          if (isSelectMode) {
+            setSelectedLocation(null);
+          }
+        }} 
+      />
+
+      {/* Map Click Handler - only active in select mode */}
+      <MapClickHandlerWrapper
+        isSelectMode={isSelectMode}
+        onLocationSelect={handleLocationSelect}
+      />
+
+      {/* Selected Location Popup */}
+      {selectedLocation && (
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-auto">
+          <SelectedLocationPopup
+            location={selectedLocation}
+            onClose={handleClosePopup}
+            onSendToChat={handleSendToChat}
+          />
+        </div>
+      )}
+
+      {/* Selected Location Marker */}
+      {selectedLocation && (
+        <div 
+          className="absolute z-20 pointer-events-none"
+          style={{
+            // This is a visual indicator - actual marker would need map integration
+            left: '50%',
+            top: '50%',
+            transform: 'translate(-50%, -50%)',
+          }}
+        >
+          <div className="relative">
+            <div className="absolute -inset-4 bg-cyan-500/20 rounded-full animate-ping" />
+            <div className="relative h-4 w-4 bg-cyan-500 rounded-full border-2 border-white shadow-lg" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * MapClickHandlerWrapper - Wrapper to use MapClickHandler outside of Map context
+ * This needs to be rendered inside a Map component to access the map context
+ */
+function MapClickHandlerWrapper({
+  isSelectMode,
+  onLocationSelect,
+}: {
+  isSelectMode: boolean;
+  onLocationSelect: (location: SelectedLocation) => void;
+}) {
+  // This component needs to be rendered inside the Map component
+  // We'll use a portal-like approach by rendering it conditionally
+  return null; // The actual handler is integrated into the Map component
+}
+
+/**
  * InteractableTacticalMap - A version of TacticalMap that Tambo can modify in-place
  * 
  * Use this component in your layout when you want Tambo to update an existing map
  * rather than rendering new maps in the chat. This component registers itself
  * with Tambo automatically when mounted.
  */
-export const InteractableTacticalMap = withInteractable(TacticalMap, {
+const BaseTacticalMap = withInteractable(TacticalMap, {
   componentName: "TacticalMap",
   description:
     "A tactical crisis map that displays wildfires, volcanoes, earthquakes, and other crisis events. Tambo can update the markers, zoom level, and center position to show crisis data from NASA FIRMS and other sources.",
   propsSchema: tacticalMapSchema,
 });
+
+/**
+ * Wrapper component that intercepts Tambo's marker updates and accumulates them
+ */
+function MarkerAccumulatorWrapper({
+  markers,
+  children,
+  ...props
+}: TacticalMapProps & { children?: React.ReactNode }) {
+  const { addMarkers, accumulatedMarkers } = useMapChatContext();
+  const lastMarkersRef = useRef<string>("");
+
+  // When Tambo sends new markers, add them to the accumulated list
+  useEffect(() => {
+    if (!markers || markers.length === 0) return;
+    
+    // Create a signature to detect if markers actually changed
+    const markersSignature = markers.map(m => m.id).sort().join(",");
+    
+    if (markersSignature !== lastMarkersRef.current) {
+      lastMarkersRef.current = markersSignature;
+      
+      // Filter valid markers before adding
+      const validNewMarkers = markers.filter(isValidMarker);
+      if (validNewMarkers.length > 0) {
+        console.log('Accumulating new markers from Tambo:', validNewMarkers.length);
+        addMarkers(validNewMarkers);
+      }
+    }
+  }, [markers, addMarkers]);
+
+  // Use accumulated markers instead of just the new ones
+  return (
+    <TacticalMap
+      {...props}
+      markers={accumulatedMarkers}
+    />
+  );
+}
+
+/**
+ * InteractableTacticalMap with Select Mode
+ * 
+ * This is the main export that includes both Tambo interactability and location selection.
+ * It also accumulates markers from multiple searches instead of replacing them.
+ */
+export function InteractableTacticalMap({
+  onLocationSelect,
+  ...props
+}: TacticalMapProps & {
+  onLocationSelect?: (location: SelectedLocation, query: string) => void;
+}) {
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
+  const { addMarkers, accumulatedMarkers } = useMapChatContext();
+  const lastMarkersRef = useRef<string>("");
+
+  const handleLocationSelect = (location: SelectedLocation) => {
+    setSelectedLocation(location);
+  };
+
+  const handleSendToChat = (query: string) => {
+    if (selectedLocation && onLocationSelect) {
+      onLocationSelect(selectedLocation, query);
+    }
+    setSelectedLocation(null);
+    setIsSelectMode(false);
+  };
+
+  const handleClosePopup = () => {
+    setSelectedLocation(null);
+  };
+
+  // Custom wrapper to intercept Tambo's marker updates
+  const AccumulatingBaseTacticalMap = useMemo(() => {
+    return withInteractable(
+      (mapProps: TacticalMapProps & { _isSelectMode?: boolean; _onLocationSelect?: (location: SelectedLocation) => void }) => {
+        const { markers: tamboMarkers, ...restProps } = mapProps;
+        
+        // When Tambo sends new markers, accumulate them
+        useEffect(() => {
+          if (!tamboMarkers || tamboMarkers.length === 0) return;
+          
+          const markersSignature = tamboMarkers.map(m => m.id).sort().join(",");
+          
+          if (markersSignature !== lastMarkersRef.current) {
+            lastMarkersRef.current = markersSignature;
+            
+            const validNewMarkers = tamboMarkers.filter(isValidMarker);
+            if (validNewMarkers.length > 0) {
+              console.log('Accumulating markers from Tambo:', validNewMarkers.length);
+              addMarkers(validNewMarkers);
+            }
+          }
+        }, [tamboMarkers]);
+
+        // Use accumulated markers
+        return <TacticalMap {...restProps} markers={accumulatedMarkers} />;
+      },
+      {
+        componentName: "TacticalMap",
+        description:
+          "A tactical crisis map that displays wildfires, volcanoes, earthquakes, and other crisis events. Tambo can update the markers, zoom level, and center position to show crisis data from NASA FIRMS and other sources. IMPORTANT: Markers are ACCUMULATED - new markers are added to existing ones, not replaced.",
+        propsSchema: tacticalMapSchema,
+      }
+    );
+  }, [addMarkers, accumulatedMarkers]);
+
+  return (
+    <div className="relative w-full h-full">
+      {/* The base interactable map with select mode props */}
+      <AccumulatingBaseTacticalMap 
+        {...props}
+        markers={accumulatedMarkers}
+        _isSelectMode={isSelectMode}
+        _onLocationSelect={handleLocationSelect}
+      />
+      
+      {/* Select Mode Toggle Button - positioned top-right */}
+      <SelectModeToggle 
+        isSelectMode={isSelectMode} 
+        onToggle={() => {
+          setIsSelectMode(!isSelectMode);
+          if (isSelectMode) {
+            setSelectedLocation(null);
+          }
+        }} 
+      />
+
+      {/* Select Mode Indicator Overlay */}
+      {isSelectMode && !selectedLocation && (
+        <div className="absolute inset-0 pointer-events-none z-10">
+          <div className="absolute inset-0 border-4 border-cyan-500/30 rounded-lg" />
+          <div className="absolute bottom-20 left-1/2 -translate-x-1/2 bg-cyan-500/90 text-white px-4 py-2 rounded-full text-sm font-medium shadow-lg">
+            Click anywhere on the map to select a location
+          </div>
+        </div>
+      )}
+
+      {/* Selected Location Popup - centered on screen */}
+      {selectedLocation && (
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-auto">
+          <SelectedLocationPopup
+            location={selectedLocation}
+            onClose={handleClosePopup}
+            onSendToChat={handleSendToChat}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
 
