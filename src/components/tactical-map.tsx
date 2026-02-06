@@ -313,50 +313,47 @@ function RegionHighlightLayer({ regions }: { regions: string[] }) {
 }
 
 /**
- * Small overlay to toggle between 2D and 3D (globe) views.
- * Uses MapLibre's setProjection API behind the scenes.
+ * Map style selector - allows switching between different map styles
+ * Includes Default (Carto), OpenStreetMap, and OpenStreetMap 3D
  */
-function MapViewModeToggle() {
+function MapStyleSelector() {
   const { map } = useMap();
-  const [is3D, setIs3D] = useState(false);
+  const [style, setStyle] = useState<"default" | "openstreetmap" | "openstreetmap3d">("default");
 
-  const handleToggle = () => {
-    if (!map) return;
-
-    if (!is3D) {
-      // Enable globe projection and tilt the camera for a 3D feel
-      (map as any).setProjection({ name: "globe" });
-      map.easeTo({ pitch: 60, bearing: 20, duration: 800 });
-      setIs3D(true);
-    } else {
-      // Return to standard mercator 2D view
-      (map as any).setProjection({ name: "mercator" });
-      map.easeTo({ pitch: 0, bearing: 0, duration: 800 });
-      setIs3D(false);
-    }
+  const styles = {
+    default: undefined, // Uses default Carto style
+    openstreetmap: "https://tiles.openfreemap.org/styles/bright",
+    openstreetmap3d: "https://tiles.openfreemap.org/styles/liberty",
   };
 
-  const handleReset = () => {
+  const handleStyleChange = (newStyle: typeof style) => {
     if (!map) return;
-    map.easeTo({ pitch: 0, bearing: 0, duration: 600 });
+    
+    setStyle(newStyle);
+    
+    const styleUrl = styles[newStyle];
+    const is3D = newStyle === "openstreetmap3d";
+    
+    // Change map style if not default
+    if (styleUrl) {
+      map.setStyle(styleUrl);
+    }
+    
+    // Adjust pitch for 3D view
+    map.easeTo({ pitch: is3D ? 60 : 0, duration: 500 });
   };
 
   return (
-    <div className="pointer-events-auto absolute left-4 bottom-4 z-20 flex gap-2">
-      <button
-        type="button"
-        onClick={handleToggle}
-        className="rounded-md border border-border bg-background/80 px-2 py-1 text-xs font-medium shadow-sm backdrop-blur-sm hover:bg-accent/70"
+    <div className="pointer-events-auto absolute left-4 bottom-4 z-20">
+      <select
+        value={style}
+        onChange={(e) => handleStyleChange(e.target.value as typeof style)}
+        className="rounded-md border border-border bg-background/90 px-3 py-1.5 text-xs font-medium shadow-lg backdrop-blur-sm hover:bg-background transition-colors cursor-pointer"
       >
-        {is3D ? "2D View" : "3D View"}
-      </button>
-      <button
-        type="button"
-        onClick={handleReset}
-        className="rounded-md border border-border bg-background/60 px-2 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur-sm hover:bg-accent/50"
-      >
-        Reset
-      </button>
+        <option value="default">Default (Carto)</option>
+        <option value="openstreetmap">OpenStreetMap</option>
+        <option value="openstreetmap3d">OpenStreetMap 3D</option>
+      </select>
     </div>
   );
 }
@@ -373,11 +370,11 @@ export interface SelectedLocation {
 /**
  * SelectModeToggle - Button to enable/disable location selection mode
  */
-function SelectModeToggle({ 
-  isSelectMode, 
-  onToggle 
-}: { 
-  isSelectMode: boolean; 
+function SelectModeToggle({
+  isSelectMode,
+  onToggle
+}: {
+  isSelectMode: boolean;
   onToggle: () => void;
 }) {
   return (
@@ -494,7 +491,7 @@ function MapClickHandler({
 
     const handleClick = async (e: maplibregl.MapMouseEvent) => {
       const { lng, lat } = e.lngLat;
-      
+
       // Try to get place name via reverse geocoding (using Nominatim - free)
       let placeName: string | undefined;
       try {
@@ -660,7 +657,7 @@ export function TacticalMap({
   const openNewsModal = (marker: CrisisMarker) => {
     // Safely handle relatedNews - it might be null, undefined, or not an array
     const relatedNewsArray = Array.isArray(marker.relatedNews) ? marker.relatedNews : [];
-    
+
     const articles: NewsArticle[] = relatedNewsArray.map((item) => ({
       id: item.id,
       title: item.title,
@@ -752,13 +749,21 @@ export function TacticalMap({
     );
   }, [validMarkers]);
 
-  // Auto-fly to fit all markers when they are present (unless explicitly disabled)
-  // Default: auto-fly when markers exist and flyToMarkers is not explicitly false
-  const shouldFlyToMarkers = flyToMarkers ?? validMarkers.length > 0;
+  // Only fly to markers when explicitly requested by Tambo (flyToMarkers === true)
+  // Don't auto-fly just because markers exist
+  const shouldFlyToMarkers = flyToMarkers === true;
+  const prevMarkerCountRef = useRef(0);
 
   useEffect(() => {
     if (!shouldFlyToMarkers || !mapRef.current || validMarkers.length === 0)
       return;
+
+    // Only fly if this is a NEW set of markers (count changed)
+    if (validMarkers.length === prevMarkerCountRef.current) {
+      return;
+    }
+
+    prevMarkerCountRef.current = validMarkers.length;
 
     // Small delay to ensure map is ready
     const timer = setTimeout(() => {
@@ -784,52 +789,133 @@ export function TacticalMap({
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [shouldFlyToMarkers, validMarkers]);
+  }, [shouldFlyToMarkers, validMarkers.length]);
 
-  // Fly to center when centerLatitude/centerLongitude/zoomLevel (or regionName) change
-  // This enables Tambo to update the map view in real-time even without markers
+  // Track if center/zoom was explicitly set by Tambo
+  const prevCenterRef = useRef<{lat: number, lng: number, zoom: number} | null>(null);
+
+  // Only fly to center when Tambo explicitly changes centerLatitude/centerLongitude/zoomLevel
+  // Don't fly on initial render or when just interacting with the map
   useEffect(() => {
     if (!mapRef.current) return;
+
+    const currentCenter = {
+      lat: safeCenterLatitude,
+      lng: safeCenterLongitude,
+      zoom: safeZoomLevel
+    };
+
+    // Skip if this is the first render (no previous center)
+    if (!prevCenterRef.current) {
+      prevCenterRef.current = currentCenter;
+      return;
+    }
+
+    // Only fly if Tambo explicitly changed the center/zoom
+    const centerChanged = 
+      prevCenterRef.current.lat !== currentCenter.lat ||
+      prevCenterRef.current.lng !== currentCenter.lng ||
+      prevCenterRef.current.zoom !== currentCenter.zoom;
+
+    if (!centerChanged) {
+      return;
+    }
+
+    prevCenterRef.current = currentCenter;
 
     // Only fly if we have no markers (markers take priority via flyToMarkers)
     const hasMarkers = validMarkers.length > 0;
 
-    // Small delay to ensure map is ready
-    const timer = setTimeout(() => {
-      if (!mapRef.current) return;
+    if (!hasMarkers) {
+      const targetCenter =
+        regionFromProp != null
+          ? [regionFromProp.lng, regionFromProp.lat]
+          : [safeCenterLongitude, safeCenterLatitude] as [number, number];
+      const targetZoom = regionFromProp != null ? regionFromProp.zoom : safeZoomLevel;
 
-      // If we have markers and flyToMarkers is enabled, that effect handles it
-      // Only fly to center if there are no markers
-      if (!hasMarkers) {
-        const targetCenter =
-          regionFromProp != null
-            ? [regionFromProp.lng, regionFromProp.lat]
-            : [centerLongitude, centerLatitude] as [number, number];
-        const targetZoom = regionFromProp != null ? regionFromProp.zoom : zoomLevel;
+      mapRef.current.flyTo({
+        center: targetCenter as [number, number],
+        zoom: targetZoom,
+        duration: 1500,
+      });
+    }
+  }, [safeCenterLatitude, safeCenterLongitude, safeZoomLevel, regionFromProp, validMarkers.length]);
 
-        mapRef.current.flyTo({
-          center: targetCenter as [number, number],
-          zoom: targetZoom,
-          duration: 1500,
-        });
+  // Set initial camera angle for 3D globe view
+  useEffect(() => {
+    if (!mapRef.current) return;
+    
+    const map = mapRef.current;
+    
+    const setupCamera = () => {
+      console.log('🌍 Setting up 3D camera angle...');
+      map.easeTo({
+        pitch: 50,
+        bearing: 0,
+        duration: 1000,
+      });
+    };
+    
+    // Wait for map to load before adjusting camera
+    if (map.loaded()) {
+      setupCamera();
+    } else {
+      map.once('load', setupCamera);
+    }
+    
+    return () => {
+      map.off('load', setupCamera);
+    };
+  }, []);
+
+  // Handle zoom level changes to switch between globe and flat view
+  useEffect(() => {
+    if (!mapRef.current) return;
+    
+    const map = mapRef.current;
+    
+    const handleZoom = () => {
+      const zoom = map.getZoom();
+      
+      // Switch to flat mercator when zoomed in (zoom > 5)
+      // Keep globe when zoomed out (zoom <= 5)
+      if (zoom > 5) {
+        const currentProjection = (map as any).getProjection();
+        if (currentProjection?.name === "globe") {
+          console.log('📍 Switching to flat mercator projection');
+          (map as any).setProjection({ name: "mercator" });
+          map.easeTo({ pitch: 0, duration: 800 });
+        }
+      } else {
+        const currentProjection = (map as any).getProjection();
+        if (currentProjection?.name !== "globe") {
+          console.log('🌍 Switching to globe projection');
+          (map as any).setProjection({ name: "globe" });
+          map.easeTo({ pitch: 50, duration: 800 });
+        }
       }
-    }, 100);
-
-    return () => clearTimeout(timer);
-  }, [centerLatitude, centerLongitude, zoomLevel, regionFromProp, validMarkers.length]);
+    };
+    
+    map.on('zoom', handleZoom);
+    
+    return () => {
+      map.off('zoom', handleZoom);
+    };
+  }, []);
 
   return (
     <div className="w-full h-full">
       <Map
         ref={mapRef}
         theme="dark"
+        projection={{ type: "globe" }}
         center={
           regionFromProp != null
             ? [regionFromProp.lng, regionFromProp.lat]
             : [safeCenterLongitude, safeCenterLatitude]
         }
         zoom={regionFromProp != null ? regionFromProp.zoom : safeZoomLevel}
-        minZoom={1.5}
+        minZoom={1}
         maxZoom={18}
       >
         <MapControls
@@ -871,66 +957,73 @@ export function TacticalMap({
               key={marker.id}
               longitude={marker.longitude}
               latitude={marker.latitude}
-              offset={[0, -10]}
+              offset={[0, -12]}
             >
-              <MarkerContent className="z-10 group">
-                <div
-                  className={cn(
-                    "relative flex h-8 w-8 items-center justify-center transition-transform hover:scale-110",
-                    "cursor-pointer"
-                  )}
-                  title={marker.title}
-                >
-                  {/* Soft glow */}
+              <MarkerContent className="z-10 group cursor-pointer">
+                {/* Clean pin-style marker like mapcn examples */}
+                <div className="relative flex flex-col items-center">
+                  {/* Pin head - solid circle with border */}
                   <div
                     className={cn(
-                      "absolute h-8 w-8 rounded-full opacity-40 blur-md transition-opacity group-hover:opacity-70",
-                      (marker as any).__regionApprox && "scale-150 md:scale-200",
+                      "relative flex h-6 w-6 items-center justify-center rounded-full border-2 border-white shadow-lg transition-transform group-hover:scale-110",
                       getMarkerColor(marker.category)
                     )}
-                  />
-                  {/* Solid core */}
-                  <div className="relative flex h-3 w-3 items-center justify-center rounded-full border border-white/20 bg-background shadow-lg ring-1 ring-white/10">
-                    <div className={cn("h-1.5 w-1.5 rounded-full", getMarkerColor(marker.category).replace('bg-', 'bg-'))} />
+                    title={marker.title}
+                  >
+                    {/* Inner dot for emphasis */}
+                    <div className="h-2 w-2 rounded-full bg-white/90" />
                   </div>
+                  {/* Pin point - triangle pointing down */}
+                  <div 
+                    className={cn(
+                      "w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] -mt-[1px]",
+                      getMarkerColor(marker.category).replace('bg-', 'border-t-')
+                    )}
+                    style={{
+                      filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
+                    }}
+                  />
                 </div>
               </MarkerContent>
 
+
               <MarkerPopup closeButton>
-                <div className="glass-card min-w-[220px] max-w-[280px] rounded-lg p-3 text-sm backdrop-blur-xl">
-                  {/* Compact header with category indicator */}
-                  <div className="flex items-start gap-2">
-                    <div
-                      className={cn(
-                        "mt-1 h-2.5 w-2.5 shrink-0 rounded-full shadow-[0_0_8px_currentColor]",
-                        getMarkerColor(marker.category).replace('bg-', 'text-')
-                      )}
-                      style={{ backgroundColor: 'currentColor' }}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <span className="rounded-full border border-border bg-muted/50 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
-                        {marker.category}
-                      </span>
-                      <h3 className="mt-1.5 font-medium leading-snug tracking-tight text-foreground line-clamp-2">
-                        {marker.title}
-                      </h3>
-                      {marker.source && (
-                        <p className="mt-1 text-[10px] text-muted-foreground/70">
-                          Via {marker.source}
-                        </p>
-                      )}
-                    </div>
+                {/* Clean card design like mapcn Brooklyn Bridge example */}
+                <div className="min-w-[280px] max-w-[320px] rounded-xl overflow-hidden bg-card border border-border shadow-xl">
+                  {/* Category badge at top */}
+                  <div className="px-4 pt-3 pb-2">
+                    <span className={cn(
+                      "inline-block px-2 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wider text-white",
+                      getMarkerColor(marker.category)
+                    )}>
+                      {marker.category}
+                    </span>
+                  </div>
+                  
+                  {/* Title */}
+                  <div className="px-4 pb-3">
+                    <h3 className="text-base font-semibold text-foreground leading-tight line-clamp-2">
+                      {marker.title}
+                    </h3>
+                    {marker.source && (
+                      <p className="mt-1.5 text-xs text-muted-foreground flex items-center gap-1">
+                        <span className="text-muted-foreground/60">Source:</span>
+                        {marker.source}
+                      </p>
+                    )}
                   </div>
 
-                  {/* Read button - opens modal with full details */}
-                  <button
-                    type="button"
-                    onClick={() => openNewsModal(marker)}
-                    className="mt-3 w-full rounded-md border border-emerald-500/50 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-400 transition-all hover:bg-emerald-500/20 hover:border-emerald-500 flex items-center justify-center gap-2"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                    Read More
-                  </button>
+                  {/* Action button */}
+                  <div className="px-4 pb-4">
+                    <button
+                      type="button"
+                      onClick={() => openNewsModal(marker)}
+                      className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 flex items-center justify-center gap-2"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      View Details
+                    </button>
+                  </div>
                 </div>
               </MarkerPopup>
             </MapMarker>
@@ -943,8 +1036,8 @@ export function TacticalMap({
           <RegionHighlightLayer regions={regionsToHighlight} />
         )}
 
-        {/* 3D / 2D view toggle overlay (MapLibre projection + pitch/bearing) */}
-        <MapViewModeToggle />
+        {/* Map style selector overlay */}
+        <MapStyleSelector />
 
         {/* Popup for crisis points rendered via the cluster layer (when zoomed out) */}
         {clusterPopup && (
@@ -997,10 +1090,9 @@ export function TacticalMap({
                     url: clusterPopup.properties.url,
                     relatedNews: clusterPopup.properties.relatedNews,
                   };
-                  openNewsModal(markerData);
                   setClusterPopup(null);
                 }}
-                className="w-full rounded-md border border-emerald-500/50 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-400 transition-all hover:bg-emerald-500/20 hover:border-emerald-500 flex items-center justify-center gap-2"
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-medium text-foreground shadow-sm transition-all hover:bg-accent hover:text-accent-foreground flex items-center justify-center gap-2"
               >
                 <ExternalLink className="h-3.5 w-3.5" />
                 Read More
@@ -1115,16 +1207,16 @@ export function TacticalMapWithSelectMode({
   return (
     <div className="relative w-full h-full">
       <TacticalMap {...props} />
-      
+
       {/* Select Mode Toggle Button */}
-      <SelectModeToggle 
-        isSelectMode={isSelectMode} 
+      <SelectModeToggle
+        isSelectMode={isSelectMode}
         onToggle={() => {
           setIsSelectMode(!isSelectMode);
           if (isSelectMode) {
             setSelectedLocation(null);
           }
-        }} 
+        }}
       />
 
       {/* Map Click Handler - only active in select mode */}
@@ -1146,7 +1238,7 @@ export function TacticalMapWithSelectMode({
 
       {/* Selected Location Marker */}
       {selectedLocation && (
-        <div 
+        <div
           className="absolute z-20 pointer-events-none"
           style={{
             // This is a visual indicator - actual marker would need map integration
@@ -1197,42 +1289,55 @@ const BaseTacticalMap = withInteractable(TacticalMap, {
 
 /**
  * Wrapper component that intercepts Tambo's marker updates and accumulates them
+ * This component must be stable (not recreated) to maintain Tambo's connection
  */
-function MarkerAccumulatorWrapper({
-  markers,
-  children,
-  ...props
-}: TacticalMapProps & { children?: React.ReactNode }) {
+function TacticalMapAccumulator(props: TacticalMapProps & { _isSelectMode?: boolean; _onLocationSelect?: (location: SelectedLocation) => void }) {
+  const { markers: tamboMarkers, ...restProps } = props;
   const { addMarkers, accumulatedMarkers } = useMapChatContext();
-  const lastMarkersRef = useRef<string>("");
 
-  // When Tambo sends new markers, add them to the accumulated list
+  // Debug: Log what Tambo is sending
+  console.log('🔍 TacticalMapAccumulator render:', {
+    tamboMarkersCount: tamboMarkers?.length || 0,
+    accumulatedCount: accumulatedMarkers.length,
+    tamboMarkers: tamboMarkers,
+  });
+
+  // When Tambo sends new markers, accumulate them IMMEDIATELY
   useEffect(() => {
-    if (!markers || markers.length === 0) return;
-    
-    // Create a signature to detect if markers actually changed
-    const markersSignature = markers.map(m => m.id).sort().join(",");
-    
-    if (markersSignature !== lastMarkersRef.current) {
-      lastMarkersRef.current = markersSignature;
-      
-      // Filter valid markers before adding
-      const validNewMarkers = markers.filter(isValidMarker);
-      if (validNewMarkers.length > 0) {
-        console.log('Accumulating new markers from Tambo:', validNewMarkers.length);
-        addMarkers(validNewMarkers);
-      }
+    if (!tamboMarkers || tamboMarkers.length === 0) {
+      console.log('⏭️ No markers from Tambo, skipping');
+      return;
     }
-  }, [markers, addMarkers]);
+    
+    const validNewMarkers = tamboMarkers.filter(isValidMarker);
+    console.log('🔍 Marker validation:', {
+      received: tamboMarkers.length,
+      valid: validNewMarkers.length,
+      categories: validNewMarkers.map(m => m.category),
+      ids: validNewMarkers.map(m => m.id),
+    });
+    
+    if (validNewMarkers.length > 0) {
+      console.log('✅ ADDING markers from Tambo:', validNewMarkers.length, validNewMarkers);
+      addMarkers(validNewMarkers);
+    } else {
+      console.warn('⚠️ No valid markers to accumulate!', tamboMarkers);
+    }
+  }, [tamboMarkers, addMarkers]);
 
-  // Use accumulated markers instead of just the new ones
-  return (
-    <TacticalMap
-      {...props}
-      markers={accumulatedMarkers}
-    />
-  );
+  // Always render with accumulated markers
+  console.log('🎨 Rendering TacticalMap with', accumulatedMarkers.length, 'accumulated markers');
+  return <TacticalMap {...restProps} markers={accumulatedMarkers} />;
 }
+
+// Create the interactable version ONCE at module level - this is critical!
+// This ensures Tambo maintains its connection across updates
+const InteractableAccumulatingMap = withInteractable(TacticalMapAccumulator, {
+  componentName: "TacticalMap",
+  description:
+    "A tactical crisis map that displays wildfires, volcanoes, earthquakes, and other crisis events. Tambo can update the markers, zoom level, and center position to show crisis data from NASA FIRMS and other sources. IMPORTANT: Markers are ACCUMULATED - new markers are added to existing ones, not replaced.",
+  propsSchema: tacticalMapSchema,
+});
 
 /**
  * InteractableTacticalMap with Select Mode
@@ -1248,8 +1353,6 @@ export function InteractableTacticalMap({
 }) {
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
-  const { addMarkers, accumulatedMarkers } = useMapChatContext();
-  const lastMarkersRef = useRef<string>("");
 
   const handleLocationSelect = (location: SelectedLocation) => {
     setSelectedLocation(location);
@@ -1267,60 +1370,24 @@ export function InteractableTacticalMap({
     setSelectedLocation(null);
   };
 
-  // Custom wrapper to intercept Tambo's marker updates
-  const AccumulatingBaseTacticalMap = useMemo(() => {
-    return withInteractable(
-      (mapProps: TacticalMapProps & { _isSelectMode?: boolean; _onLocationSelect?: (location: SelectedLocation) => void }) => {
-        const { markers: tamboMarkers, ...restProps } = mapProps;
-        
-        // When Tambo sends new markers, accumulate them
-        useEffect(() => {
-          if (!tamboMarkers || tamboMarkers.length === 0) return;
-          
-          const markersSignature = tamboMarkers.map(m => m.id).sort().join(",");
-          
-          if (markersSignature !== lastMarkersRef.current) {
-            lastMarkersRef.current = markersSignature;
-            
-            const validNewMarkers = tamboMarkers.filter(isValidMarker);
-            if (validNewMarkers.length > 0) {
-              console.log('Accumulating markers from Tambo:', validNewMarkers.length);
-              addMarkers(validNewMarkers);
-            }
-          }
-        }, [tamboMarkers]);
-
-        // Use accumulated markers
-        return <TacticalMap {...restProps} markers={accumulatedMarkers} />;
-      },
-      {
-        componentName: "TacticalMap",
-        description:
-          "A tactical crisis map that displays wildfires, volcanoes, earthquakes, and other crisis events. Tambo can update the markers, zoom level, and center position to show crisis data from NASA FIRMS and other sources. IMPORTANT: Markers are ACCUMULATED - new markers are added to existing ones, not replaced.",
-        propsSchema: tacticalMapSchema,
-      }
-    );
-  }, [addMarkers, accumulatedMarkers]);
-
   return (
     <div className="relative w-full h-full">
-      {/* The base interactable map with select mode props */}
-      <AccumulatingBaseTacticalMap 
+      {/* Use the stable interactable component created at module level */}
+      <InteractableAccumulatingMap
         {...props}
-        markers={accumulatedMarkers}
         _isSelectMode={isSelectMode}
         _onLocationSelect={handleLocationSelect}
       />
-      
+
       {/* Select Mode Toggle Button - positioned top-right */}
-      <SelectModeToggle 
-        isSelectMode={isSelectMode} 
+      <SelectModeToggle
+        isSelectMode={isSelectMode}
         onToggle={() => {
           setIsSelectMode(!isSelectMode);
           if (isSelectMode) {
             setSelectedLocation(null);
           }
-        }} 
+        }}
       />
 
       {/* Select Mode Indicator Overlay */}

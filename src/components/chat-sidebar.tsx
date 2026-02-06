@@ -22,7 +22,8 @@ import {
 } from "@/components/tambo/message-suggestions";
 import { useMapChatContext } from "@/components/veronica-content";
 import { useEffect, useRef } from "react";
-import { saveThreadData, getPersistedThreadData } from "@/lib/local-storage";
+import { saveThreadData } from "@/lib/local-storage";
+import { cn } from "@/lib/utils";
 
 /**
  * Component that persists thread messages to localStorage
@@ -61,7 +62,7 @@ function ThreadPersistence() {
 
         if (messagesSignature !== lastSavedRef.current && validMessages.length > 0) {
             lastSavedRef.current = messagesSignature;
-            
+
             // Save thread data to localStorage (only valid messages)
             console.log('Saving thread to localStorage:', validMessages.length, 'messages');
             saveThreadData(thread.id, validMessages);
@@ -82,7 +83,7 @@ function MapQueryHandler() {
         if (pendingQuery) {
             // Set the value in the input
             setValue(pendingQuery);
-            
+
             // Submit after a short delay to ensure the value is set
             const timer = setTimeout(async () => {
                 try {
@@ -130,11 +131,11 @@ export function ChatSidebar() {
     ];
 
     return (
-        <ThreadContainer disableSidebarSpacing className="h-full bg-background/50 backdrop-blur-sm">
+        <ThreadContainer disableSidebarSpacing className="h-full bg-background flex flex-col">
             {/* Persist thread messages to localStorage */}
             <ThreadPersistence />
-            
-            <ScrollableMessageContainer className="p-4 scroll-smooth">
+
+            <ScrollableMessageContainer className="flex-1 p-4 scroll-smooth">
                 <ThreadContent>
                     <ThreadContentMessages />
                 </ThreadContent>
@@ -146,36 +147,33 @@ export function ChatSidebar() {
             </MessageSuggestions>
 
             {/* Message input */}
-            <div className="px-4 pb-4">
-                <div className="relative border border-border bg-muted/20 backdrop-blur-sm p-1">
-                    {/* Corner accents */}
-                    <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-foreground/20" />
-                    <div className="absolute top-0 right-0 w-2 h-2 border-t border-r border-foreground/20" />
-                    <div className="absolute bottom-0 left-0 w-2 h-2 border-b border-l border-foreground/20" />
-                    <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-foreground/20" />
-
-                    <MessageInput variant="bordered" className="font-mono text-sm [&_textarea]:min-h-[2.5rem] [&_textarea]:bg-transparent border-0 ring-0 shadow-none">
-                        <div className="flex items-center px-2 py-1 border-b border-border mb-1 text-[10px] text-muted-foreground/50 select-none">
-                            <span>USER_INPUT //</span>
-                        </div>
+            <div className="p-4 pt-2">
+                <div className="relative rounded-xl border border-input bg-card shadow-sm hover:shadow-md transition-shadow">
+                    <MessageInput variant="default" className="text-sm border-0 ring-0 shadow-none bg-transparent">
                         <MessageInputTextarea
-                            placeholder="ENTER_COMMAND..."
-                            className="bg-transparent border-0 focus-visible:ring-0 px-2 py-1 placeholder:text-muted-foreground/30 font-mono text-sm tracking-tight text-foreground"
+                            placeholder="Ask Veronica..."
+                            className="bg-transparent border-0 focus-visible:ring-0 px-4 py-3 placeholder:text-muted-foreground min-h-[50px] resize-none"
                         />
-                        <MessageInputToolbar className="px-2 pb-1 opacity-50 hover:opacity-100 transition-opacity">
-                            <MessageInputSubmitButton />
+                        <MessageInputToolbar className="px-2 pb-2 flex justify-between items-center">
+                            <div className="flex-1" /> {/* Spacer */}
+                            <MessageInputSubmitButton className="w-8 h-8 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors" />
                         </MessageInputToolbar>
                         <MessageInputError />
                         {/* Handler for map queries - must be inside MessageInput context */}
                         <MapQueryHandler />
                     </MessageInput>
                 </div>
+                <div className="mt-2 text-center text-[10px] text-muted-foreground/60">
+                    Veronica AI can make mistakes. Verify critical info.
+                </div>
             </div>
 
             {/* Message suggestions */}
-            <MessageSuggestions initialSuggestions={defaultSuggestions}>
-                <MessageSuggestionsList />
-            </MessageSuggestions>
+            <div className="px-4 pb-4">
+                <MessageSuggestions initialSuggestions={defaultSuggestions}>
+                    <MessageSuggestionsList className="flex gap-2 overflow-x-auto pb-2" />
+                </MessageSuggestions>
+            </div>
         </ThreadContainer>
     );
 }

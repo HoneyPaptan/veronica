@@ -283,6 +283,9 @@ import { AsciiLoader } from "@/components/ui/ascii-loader";
 /**
  * Internal component to render generation stage content
  */
+/**
+ * Internal component to render generation stage content
+ */
 function GenerationStageContent({
   generationStage,
   isGenerating,
@@ -290,14 +293,9 @@ function GenerationStageContent({
   generationStage?: string;
   isGenerating: boolean;
 }) {
-  if (generationStage && generationStage !== GenerationStage.COMPLETE) {
-    // Check if stage is "fetching context" or similar and normalize it if needed
-    return <AsciiLoader text={generationStage} variant="bar" />;
-  }
-  if (isGenerating) {
-    return <AsciiLoader text="THINKING" variant="spinner" />;
-  }
-  return null;
+  // Use the modern MessageGenerationStage which handles its own state from useTambo
+  // We pass className to match the status container
+  return <MessageGenerationStage className="p-0" showLabel={true} />;
 }
 
 /**

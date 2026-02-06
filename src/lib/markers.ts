@@ -114,4 +114,12 @@ export const LOCATION_PRESETS: Record<string, { lat: number; lng: number; zoom: 
     "oceania": { lat: -22.7359, lng: 140.0188, zoom: 3 },
     "middle east": { lat: 29.2985, lng: 42.5510, zoom: 4 },
     "california": { lat: 36.7783, lng: -119.4179, zoom: 6 },
+    // Specific Cities Updates
+    "new delhi": { lat: 28.6139, lng: 77.2090, zoom: 11 },
+    "delhi": { lat: 28.7041, lng: 77.1025, zoom: 11 },
+    "punjab": { lat: 31.1471, lng: 75.3412, zoom: 8 },
+    "chandigarh": { lat: 30.7333, lng: 76.7794, zoom: 12 },
+    "ludhiana": { lat: 30.9010, lng: 75.8573, zoom: 12 },
+    "amritsar": { lat: 31.6340, lng: 74.8723, zoom: 12 },
+    "jalandhar": { lat: 31.3260, lng: 75.5762, zoom: 12 },
 };
