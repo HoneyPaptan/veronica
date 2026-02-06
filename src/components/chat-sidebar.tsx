@@ -14,14 +14,62 @@ import {
     ThreadContentMessages,
 } from "@/components/tambo/thread-content";
 import type { Suggestion } from "@tambo-ai/react";
-import { useTamboThreadInput } from "@tambo-ai/react";
+import { useTamboThreadInput, useTambo } from "@tambo-ai/react";
 import {
     MessageSuggestions,
     MessageSuggestionsList,
     MessageSuggestionsStatus,
 } from "@/components/tambo/message-suggestions";
 import { useMapChatContext } from "@/components/veronica-content";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { saveThreadData, getPersistedThreadData } from "@/lib/local-storage";
+
+/**
+ * Component that persists thread messages to localStorage
+ * Only saves complete, non-error messages
+ */
+function ThreadPersistence() {
+    const { thread, isIdle } = useTambo();
+    const lastSavedRef = useRef<string>("");
+
+    useEffect(() => {
+        // Only save when idle (not generating) to avoid saving incomplete states
+        if (!isIdle) return;
+        if (!thread?.messages || thread.messages.length === 0) return;
+
+        // Filter out messages with errors or that are incomplete
+        const validMessages = thread.messages.filter(m => {
+            // Skip messages with errors
+            if (m.error) return false;
+            // Skip system messages
+            if (m.role === 'system') return false;
+            // Keep user messages and complete assistant messages
+            return true;
+        });
+
+        // Don't save if the last message has an error (cancelled/failed state)
+        const lastMessage = thread.messages[thread.messages.length - 1];
+        if (lastMessage?.error) {
+            console.log('Not saving thread - last message has error');
+            return;
+        }
+
+        // Create a signature to detect if messages actually changed
+        const messagesSignature = JSON.stringify(
+            validMessages.map(m => ({ id: m.id, role: m.role }))
+        );
+
+        if (messagesSignature !== lastSavedRef.current && validMessages.length > 0) {
+            lastSavedRef.current = messagesSignature;
+            
+            // Save thread data to localStorage (only valid messages)
+            console.log('Saving thread to localStorage:', validMessages.length, 'messages');
+            saveThreadData(thread.id, validMessages);
+        }
+    }, [thread?.messages, thread?.id, isIdle]);
+
+    return null;
+}
 
 /**
  * Component that handles auto-submitting queries from the map
@@ -83,6 +131,9 @@ export function ChatSidebar() {
 
     return (
         <ThreadContainer disableSidebarSpacing className="h-full bg-background/50 backdrop-blur-sm">
+            {/* Persist thread messages to localStorage */}
+            <ThreadPersistence />
+            
             <ScrollableMessageContainer className="p-4 scroll-smooth">
                 <ThreadContent>
                     <ThreadContentMessages />

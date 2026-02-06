@@ -204,6 +204,9 @@ const ThreadContentMessages = React.forwardRef<
     return undefined;
   }, [filteredMessages]);
 
+  // Check if any message has an error (including cancelled)
+  const hasAnyError = filteredMessages.some(m => !!m.error);
+
   return (
     <div
       ref={ref}
@@ -213,6 +216,15 @@ const ThreadContentMessages = React.forwardRef<
     >
       {filteredMessages.map((message, index) => {
         const hasError = !!message.error;
+        const isCancelled = hasError && (
+          typeof message.error === 'string' 
+            ? message.error.toLowerCase().includes('cancel')
+            : (message.error as any)?.message?.toLowerCase().includes('cancel')
+        );
+        const isLastMessage = index === filteredMessages.length - 1;
+        
+        // Don't show loading if there's an error or if cancelled
+        const shouldShowLoading = isGenerating && isLastMessage && !hasError && !hasAnyError;
         
         return (
           <div
@@ -226,7 +238,7 @@ const ThreadContentMessages = React.forwardRef<
               role={message.role === "assistant" ? "assistant" : "user"}
               message={message}
               variant={variant}
-              isLoading={isGenerating && index === filteredMessages.length - 1 && !hasError}
+              isLoading={shouldShowLoading}
               className={cn(
                 "flex w-full",
                 message.role === "assistant" ? "justify-start" : "justify-end",
@@ -248,8 +260,8 @@ const ThreadContentMessages = React.forwardRef<
                   }
                 />
                 <ToolcallInfo />
-                {/* Show error with retry button if message has error */}
-                {hasError && (
+                {/* Show error with retry button if message has error (not for cancelled - those get cleared on reload) */}
+                {hasError && !isCancelled && (
                   <MessageErrorDisplay 
                     message={message} 
                     lastUserMessage={lastUserMessage}

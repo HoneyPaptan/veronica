@@ -32,6 +32,7 @@ import {
   LOCATION_PRESETS,
   type CrisisMarker,
 } from "@/lib/markers";
+import { useMapChatContext } from "@/components/veronica-content";
 
 /**
  * Schema for the TacticalMap component props that Tambo AI can control
@@ -1195,9 +1196,49 @@ const BaseTacticalMap = withInteractable(TacticalMap, {
 });
 
 /**
+ * Wrapper component that intercepts Tambo's marker updates and accumulates them
+ */
+function MarkerAccumulatorWrapper({
+  markers,
+  children,
+  ...props
+}: TacticalMapProps & { children?: React.ReactNode }) {
+  const { addMarkers, accumulatedMarkers } = useMapChatContext();
+  const lastMarkersRef = useRef<string>("");
+
+  // When Tambo sends new markers, add them to the accumulated list
+  useEffect(() => {
+    if (!markers || markers.length === 0) return;
+    
+    // Create a signature to detect if markers actually changed
+    const markersSignature = markers.map(m => m.id).sort().join(",");
+    
+    if (markersSignature !== lastMarkersRef.current) {
+      lastMarkersRef.current = markersSignature;
+      
+      // Filter valid markers before adding
+      const validNewMarkers = markers.filter(isValidMarker);
+      if (validNewMarkers.length > 0) {
+        console.log('Accumulating new markers from Tambo:', validNewMarkers.length);
+        addMarkers(validNewMarkers);
+      }
+    }
+  }, [markers, addMarkers]);
+
+  // Use accumulated markers instead of just the new ones
+  return (
+    <TacticalMap
+      {...props}
+      markers={accumulatedMarkers}
+    />
+  );
+}
+
+/**
  * InteractableTacticalMap with Select Mode
  * 
  * This is the main export that includes both Tambo interactability and location selection.
+ * It also accumulates markers from multiple searches instead of replacing them.
  */
 export function InteractableTacticalMap({
   onLocationSelect,
@@ -1207,6 +1248,8 @@ export function InteractableTacticalMap({
 }) {
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
+  const { addMarkers, accumulatedMarkers } = useMapChatContext();
+  const lastMarkersRef = useRef<string>("");
 
   const handleLocationSelect = (location: SelectedLocation) => {
     setSelectedLocation(location);
@@ -1224,11 +1267,47 @@ export function InteractableTacticalMap({
     setSelectedLocation(null);
   };
 
+  // Custom wrapper to intercept Tambo's marker updates
+  const AccumulatingBaseTacticalMap = useMemo(() => {
+    return withInteractable(
+      (mapProps: TacticalMapProps & { _isSelectMode?: boolean; _onLocationSelect?: (location: SelectedLocation) => void }) => {
+        const { markers: tamboMarkers, ...restProps } = mapProps;
+        
+        // When Tambo sends new markers, accumulate them
+        useEffect(() => {
+          if (!tamboMarkers || tamboMarkers.length === 0) return;
+          
+          const markersSignature = tamboMarkers.map(m => m.id).sort().join(",");
+          
+          if (markersSignature !== lastMarkersRef.current) {
+            lastMarkersRef.current = markersSignature;
+            
+            const validNewMarkers = tamboMarkers.filter(isValidMarker);
+            if (validNewMarkers.length > 0) {
+              console.log('Accumulating markers from Tambo:', validNewMarkers.length);
+              addMarkers(validNewMarkers);
+            }
+          }
+        }, [tamboMarkers]);
+
+        // Use accumulated markers
+        return <TacticalMap {...restProps} markers={accumulatedMarkers} />;
+      },
+      {
+        componentName: "TacticalMap",
+        description:
+          "A tactical crisis map that displays wildfires, volcanoes, earthquakes, and other crisis events. Tambo can update the markers, zoom level, and center position to show crisis data from NASA FIRMS and other sources. IMPORTANT: Markers are ACCUMULATED - new markers are added to existing ones, not replaced.",
+        propsSchema: tacticalMapSchema,
+      }
+    );
+  }, [addMarkers, accumulatedMarkers]);
+
   return (
     <div className="relative w-full h-full">
       {/* The base interactable map with select mode props */}
-      <BaseTacticalMap 
-        {...props} 
+      <AccumulatingBaseTacticalMap 
+        {...props}
+        markers={accumulatedMarkers}
         _isSelectMode={isSelectMode}
         _onLocationSelect={handleLocationSelect}
       />
