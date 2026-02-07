@@ -16,7 +16,6 @@
     "@radix-ui/react-slot": "^1.2.4",
     "@tailwindcss/oxide": "^4.1.17",
     "@tambo-ai/react": "^0.73.1",
-    "@tambo-ai/typescript-sdk": "^0.89.0",
     "@tiptap/extension-document": "^3.17.1",
     "@tiptap/extension-hard-break": "^3.17.1",
     "@tiptap/extension-mention": "^3.17.1",

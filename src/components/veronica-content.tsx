@@ -207,23 +207,7 @@ export function VeronicaContent() {
         window.location.reload();
     }, []);
 
-    // Suppress harmless MCP -32601 "Method not found" console errors
-    // These occur when MCP servers don't support certain methods but are not fatal
-    useEffect(() => {
-        const originalError = console.error;
-        console.error = (...args) => {
-            // Filter out MCP -32601 errors (Method not found)
-            const message = args[0]?.toString() || '';
-            if (message.includes('-32601') || message.includes('Method not found')) {
-                // Silently ignore these harmless MCP protocol errors
-                return;
-            }
-            originalError.apply(console, args);
-        };
-        return () => {
-            console.error = originalError;
-        };
-    }, []);
+
 
     // Handler for location selection from the map
     const handleLocationSelect = useCallback((location: SelectedLocation, query: string) => {
@@ -244,7 +228,6 @@ export function VeronicaContent() {
             apiKey={process.env.NEXT_PUBLIC_TAMBO_API_KEY!}
             components={components}
             tools={tools}
-            tamboUrl={process.env.NEXT_PUBLIC_TAMBO_URL}
             mcpServers={mcpServers}
         >
             {/* Restore thread from localStorage on mount */}

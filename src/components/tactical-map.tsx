@@ -33,29 +33,23 @@ import {
   type CrisisMarker,
 } from "@/lib/markers";
 import { useMapChatContext } from "@/components/veronica-content";
+import { Ambulance } from "lucide-react";
 
 /**
  * Schema for the TacticalMap component props that Tambo AI can control
  */
 
-// Route point schema for drawing routes on the map
-export const routePointSchema = z.object({
-  latitude: z.number().describe("Latitude of the route waypoint"),
-  longitude: z.number().describe("Longitude of the route waypoint"),
-  label: z.string().optional().describe("Optional label for this waypoint"),
-});
-
+// Route schema for drawing routes on the map (simple format like mapcn)
 export const routeSchema = z.object({
   id: z.string().describe("Unique identifier for the route"),
-  points: z
-    .array(routePointSchema)
-    .describe("Array of waypoints defining the route path"),
+  coordinates: z
+    .array(z.tuple([z.number(), z.number()]))
+    .describe("Array of [longitude, latitude] coordinate pairs defining the route path"),
   color: z.string().optional().describe("Route line color (hex or CSS color)"),
   width: z.number().optional().describe("Route line width in pixels"),
   label: z.string().optional().describe("Label for the route"),
 });
 
-export type RoutePoint = z.infer<typeof routePointSchema>;
 export type Route = z.infer<typeof routeSchema>;
 
 export const tacticalMapSchema = z.object({
@@ -653,6 +647,9 @@ export function TacticalMap({
     articles: [],
   });
 
+  // Get setPendingQuery from context to send messages to chat
+  const { setPendingQuery } = useMapChatContext();
+
   // Handler to open news modal from marker
   const openNewsModal = (marker: CrisisMarker) => {
     // Safely handle relatedNews - it might be null, undefined, or not an array
@@ -692,6 +689,12 @@ export function TacticalMap({
         date: marker.date,
       },
     });
+  };
+
+  // Handler to request evacuation plan for a specific marker
+  const requestEvacuationPlan = (marker: CrisisMarker) => {
+    const query = `Plan evacuation routes for the ${marker.category} at coordinates ${marker.latitude.toFixed(4)}, ${marker.longitude.toFixed(4)} (${marker.title})`;
+    setPendingQuery(query);
   };
 
   // Normalize and filter out invalid markers to prevent runtime errors.
@@ -1013,8 +1016,8 @@ export function TacticalMap({
                     )}
                   </div>
 
-                  {/* Action button */}
-                  <div className="px-4 pb-4">
+                  {/* Action buttons */}
+                  <div className="px-4 pb-4 space-y-2">
                     <button
                       type="button"
                       onClick={() => openNewsModal(marker)}
@@ -1023,6 +1026,18 @@ export function TacticalMap({
                       <ExternalLink className="h-4 w-4" />
                       View Details
                     </button>
+                    
+                    {/* Plan Evacuation button - only for crisis categories */}
+                    {['wildfire', 'volcano', 'earthquake', 'flood', 'storm'].includes(marker.category) && (
+                      <button
+                        type="button"
+                        onClick={() => requestEvacuationPlan(marker)}
+                        className="w-full rounded-lg border-2 border-green-500 bg-green-500/10 px-4 py-2.5 text-sm font-medium text-green-400 transition-colors hover:bg-green-500/20 flex items-center justify-center gap-2"
+                      >
+                        <Ambulance className="h-4 w-4" />
+                        Plan Evacuation
+                      </button>
+                    )}
                   </div>
                 </div>
               </MarkerPopup>
@@ -1072,45 +1087,73 @@ export function TacticalMap({
                 </div>
               </div>
 
-              {/* Read button - opens modal with full details */}
-              <button
-                type="button"
-                onClick={() => {
-                  // Create a marker-like object from cluster popup properties
-                  const markerData: CrisisMarker = {
-                    id: clusterPopup.properties.id || `cluster-${Date.now()}`,
-                    title: clusterPopup.properties.title || "News",
-                    description: clusterPopup.properties.description,
-                    latitude: clusterPopup.latitude,
-                    longitude: clusterPopup.longitude,
-                    category: clusterPopup.properties.category || "news",
-                    severity: clusterPopup.properties.severity,
-                    date: clusterPopup.properties.date,
-                    source: clusterPopup.properties.source,
-                    url: clusterPopup.properties.url,
-                    relatedNews: clusterPopup.properties.relatedNews,
-                  };
-                  setClusterPopup(null);
-                }}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-medium text-foreground shadow-sm transition-all hover:bg-accent hover:text-accent-foreground flex items-center justify-center gap-2"
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-                Read More
-              </button>
+              {/* Action buttons */}
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Create a marker-like object from cluster popup properties
+                    const markerData: CrisisMarker = {
+                      id: clusterPopup.properties.id || `cluster-${Date.now()}`,
+                      title: clusterPopup.properties.title || "News",
+                      description: clusterPopup.properties.description,
+                      latitude: clusterPopup.latitude,
+                      longitude: clusterPopup.longitude,
+                      category: clusterPopup.properties.category || "news",
+                      severity: clusterPopup.properties.severity,
+                      date: clusterPopup.properties.date,
+                      source: clusterPopup.properties.source,
+                      url: clusterPopup.properties.url,
+                      relatedNews: clusterPopup.properties.relatedNews,
+                    };
+                    openNewsModal(markerData);
+                    setClusterPopup(null);
+                  }}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-medium text-foreground shadow-sm transition-all hover:bg-accent hover:text-accent-foreground flex items-center justify-center gap-2"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  View Details
+                </button>
+
+                {/* Plan Evacuation button - only for crisis categories */}
+                {['wildfire', 'volcano', 'earthquake', 'flood', 'storm'].includes(clusterPopup.properties.category) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const markerData: CrisisMarker = {
+                        id: clusterPopup.properties.id || `cluster-${Date.now()}`,
+                        title: clusterPopup.properties.title || "Crisis",
+                        description: clusterPopup.properties.description,
+                        latitude: clusterPopup.latitude,
+                        longitude: clusterPopup.longitude,
+                        category: clusterPopup.properties.category || "other",
+                        severity: clusterPopup.properties.severity,
+                        date: clusterPopup.properties.date,
+                        source: clusterPopup.properties.source,
+                        url: clusterPopup.properties.url,
+                        relatedNews: clusterPopup.properties.relatedNews,
+                      };
+                      requestEvacuationPlan(markerData);
+                      setClusterPopup(null);
+                    }}
+                    className="w-full rounded-md border-2 border-green-500 bg-green-500/10 px-3 py-2 text-xs font-medium text-green-400 transition-all hover:bg-green-500/20 flex items-center justify-center gap-2"
+                  >
+                    <Ambulance className="h-3.5 w-3.5" />
+                    Plan Evacuation
+                  </button>
+                )}
+              </div>
             </div>
           </MapPopup>
         )}
 
-        {/* Render routes if provided */}
-        {routes &&
-          routes.length > 0 &&
-          routes.map((route) => (
+        {/* Render routes if provided - simple format like mapcn */}
+        {safeRoutes.length > 0 &&
+          safeRoutes.map((route) => (
             <MapRoute
               key={route.id}
               id={route.id}
-              coordinates={route.points.map(
-                (p) => [p.longitude, p.latitude] as [number, number]
-              )}
+              coordinates={route.coordinates}
               color={route.color || "#3b82f6"}
               width={route.width || 4}
             />
