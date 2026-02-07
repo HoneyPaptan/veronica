@@ -79,6 +79,7 @@ function useResolvedTheme(themeProp?: "light" | "dark"): "light" | "dark" {
 type MapContextValue = {
   map: MapLibreGL.Map | null;
   isLoaded: boolean;
+  styleVersion: number;
 };
 
 const MapContext = createContext<MapContextValue | null>(null);
@@ -136,6 +137,7 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
   const [mapInstance, setMapInstance] = useState<MapLibreGL.Map | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isStyleLoaded, setIsStyleLoaded] = useState(false);
+  const [styleVersion, setStyleVersion] = useState(0);
   const currentStyleRef = useRef<MapStyleOption | null>(null);
   const styleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const resolvedTheme = useResolvedTheme(themeProp);
@@ -215,16 +217,36 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
     clearStyleTimeout();
     currentStyleRef.current = newStyle;
     setIsStyleLoaded(false);
+    // Increment styleVersion to trigger re-adding of layers
+    setStyleVersion(v => v + 1);
 
     mapInstance.setStyle(newStyle, { diff: true });
   }, [mapInstance, resolvedTheme, mapStyles, clearStyleTimeout]);
+
+  // Listen for style data events to know when style has fully loaded
+  useEffect(() => {
+    if (!mapInstance) return;
+
+    const handleStyleData = () => {
+      if (mapInstance.isStyleLoaded()) {
+        setIsStyleLoaded(true);
+      }
+    };
+
+    mapInstance.on("styledata", handleStyleData);
+    
+    return () => {
+      mapInstance.off("styledata", handleStyleData);
+    };
+  }, [mapInstance]);
 
   const contextValue = useMemo(
     () => ({
       map: mapInstance,
       isLoaded: isLoaded && isStyleLoaded,
+      styleVersion,
     }),
-    [mapInstance, isLoaded, isStyleLoaded]
+    [mapInstance, isLoaded, isStyleLoaded, styleVersion]
   );
 
   return (
@@ -956,22 +978,32 @@ function MapRoute({
   onMouseLeave,
   interactive = true,
 }: MapRouteProps) {
-  const { map, isLoaded } = useMap();
+  const { map, isLoaded, styleVersion } = useMap();
   const autoId = useId();
   const id = propId ?? autoId;
   const sourceId = `route-source-${id}`;
   const layerId = `route-layer-${id}`;
+  const isAddedRef = useRef(false);
 
-  // Add source and layer on mount
+  // Add source and layer on mount or when style changes
   useEffect(() => {
     if (!isLoaded || !map) return;
 
+    // Clean up existing layer/source if they exist (for style changes)
+    try {
+      if (map.getLayer(layerId)) map.removeLayer(layerId);
+      if (map.getSource(sourceId)) map.removeSource(sourceId);
+    } catch {
+      // ignore
+    }
+
+    // Add new source and layer
     map.addSource(sourceId, {
       type: "geojson",
       data: {
         type: "Feature",
         properties: {},
-        geometry: { type: "LineString", coordinates: [] },
+        geometry: { type: "LineString", coordinates: coordinates.length > 0 ? coordinates : [] },
       },
     });
 
@@ -988,6 +1020,8 @@ function MapRoute({
       },
     });
 
+    isAddedRef.current = true;
+
     return () => {
       try {
         if (map.getLayer(layerId)) map.removeLayer(layerId);
@@ -995,21 +1029,26 @@ function MapRoute({
       } catch {
         // ignore
       }
+      isAddedRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoaded, map]);
+  }, [isLoaded, map, styleVersion]); // Re-add when styleVersion changes
 
   // When coordinates change, update the source data
   useEffect(() => {
     if (!isLoaded || !map || coordinates.length < 2) return;
 
-    const source = map.getSource(sourceId) as MapLibreGL.GeoJSONSource;
+    const source = map.getSource(sourceId) as MapLibreGL.GeoJSONSource | undefined;
     if (source) {
-      source.setData({
-        type: "Feature",
-        properties: {},
-        geometry: { type: "LineString", coordinates },
-      });
+      try {
+        source.setData({
+          type: "Feature",
+          properties: {},
+          geometry: { type: "LineString", coordinates },
+        });
+      } catch (error) {
+        console.warn('Failed to update route data:', error);
+      }
     }
   }, [isLoaded, map, coordinates, sourceId]);
 
@@ -1024,9 +1063,9 @@ function MapRoute({
     }
   }, [isLoaded, map, layerId, color, width, opacity, dashArray]);
 
-  // Handle click and hover events
+  // Handle click and hover events - re-attach when style changes
   useEffect(() => {
-    if (!isLoaded || !map || !interactive) return;
+    if (!isLoaded || !map || !interactive || !map.getLayer(layerId)) return;
 
     const handleClick = () => {
       onClick?.();
@@ -1045,9 +1084,13 @@ function MapRoute({
     map.on("mouseleave", layerId, handleMouseLeave);
 
     return () => {
-      map.off("click", layerId, handleClick);
-      map.off("mouseenter", layerId, handleMouseEnter);
-      map.off("mouseleave", layerId, handleMouseLeave);
+      try {
+        map.off("click", layerId, handleClick);
+        map.off("mouseenter", layerId, handleMouseEnter);
+        map.off("mouseleave", layerId, handleMouseLeave);
+      } catch {
+        // ignore - layer might have been removed
+      }
     };
   }, [
     isLoaded,
@@ -1057,6 +1100,7 @@ function MapRoute({
     onMouseEnter,
     onMouseLeave,
     interactive,
+    styleVersion, // Re-attach events when style changes
   ]);
 
   return null;

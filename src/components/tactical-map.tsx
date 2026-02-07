@@ -1377,8 +1377,41 @@ function TacticalMapAccumulator(props: TacticalMapProps & { _isSelectMode?: bool
 // This ensures Tambo maintains its connection across updates
 const InteractableAccumulatingMap = withInteractable(TacticalMapAccumulator, {
   componentName: "TacticalMap",
-  description:
-    "A tactical crisis map that displays wildfires, volcanoes, earthquakes, and other crisis events. Tambo can update the markers, zoom level, and center position to show crisis data from NASA FIRMS and other sources. IMPORTANT: Markers are ACCUMULATED - new markers are added to existing ones, not replaced.",
+  description: `🗺️ TACTICAL CRISIS MAP - Central visualization component for all crisis data.
+
+CORE CAPABILITIES:
+- Display crisis markers: wildfires (🔥), earthquakes (🌍), floods (🌊), storms (⛈️), volcanoes (🌋), news (📰)
+- Show EVACUATION ROUTES: Blue lines showing paths from crisis to safe locations
+- Display SAFE SPOTS: Hospitals (🏥 red), parks (🌳 green), airports (✈️ blue), shelters (🏠 amber), schools (🏫 purple)
+- Support for region highlighting and clustering
+- 3D globe view when zoomed out, flat view when zoomed in
+
+CRITICAL - EVACUATION PLANNING WORKFLOW:
+When user clicks "Plan Evacuation" button or asks for evacuation routes:
+1. AUTOMATICALLY call the planEvacuation tool with crisis coordinates
+2. The tool returns evacuation routes and safe spot markers
+3. IMMEDIATELY update the TacticalMap with:
+   - routes: Array of route objects with coordinates to draw BLUE evacuation paths
+   - markers: Crisis markers + safe spot markers (hospitals, parks, airports, etc.)
+   - flyToMarkers: true (to show the full evacuation area)
+4. Do NOT ask the user for confirmation - this is an emergency feature
+
+MARKER ACCUMULATION:
+- Markers are ACCUMULATED, not replaced
+- New crisis markers are added to existing ones
+- This allows showing multiple crises and their evacuation routes simultaneously
+
+ROUTE DISPLAY:
+- Pass routes array to show evacuation paths on the map
+- Each route has: coordinates (array of [lng, lat]), color, width
+- Routes are drawn as lines connecting crisis to safe spots
+
+EXAMPLE EVACUATION UPDATE:
+{
+  markers: [...crisisMarkers, ...safeSpotMarkers],
+  routes: [{id: "route-1", coordinates: [[lng1, lat1], [lng2, lat2]], color: "#3b82f6", width: 4}],
+  flyToMarkers: true
+}`,
   propsSchema: tacticalMapSchema,
 });
 
