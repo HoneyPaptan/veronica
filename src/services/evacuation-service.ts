@@ -128,7 +128,6 @@ async function findSafeSpots(
     return safeSpots.slice(0, 5);
 
   } catch (error) {
-    console.error("Error finding safe spots:", error);
     return safeSpots;
   }
 }
@@ -173,11 +172,7 @@ export async function findEvacuationSpots(
 }> {
   const { searchRadius = 20000 } = options;
 
-  console.log(`🚨 Finding safe spots: ${crisisTitle} at ${crisisLatitude}, ${crisisLongitude}`);
-
   const safeSpots = await findSafeSpots(crisisLatitude, crisisLongitude, searchRadius);
-
-  console.log(`🏥 Found ${safeSpots.length} safe spots`);
 
   // Convert to CrisisMarker array
   const markers: CrisisMarker[] = safeSpots.map((spot, index) => {

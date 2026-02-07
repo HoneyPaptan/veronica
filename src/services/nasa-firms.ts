@@ -150,8 +150,6 @@ export async function getActiveFires(input: GetActiveFiresInput = {}): Promise<C
     const mapKey = process.env.NEXT_PUBLIC_NASA_FIRMS_MAP_KEY;
 
     if (!mapKey) {
-        console.error("NASA FIRMS API key not configured. Set NEXT_PUBLIC_NASA_FIRMS_MAP_KEY in .env.local");
-        // Return mock data for demo purposes
         return getMockFireData(input);
     }
 
@@ -187,8 +185,6 @@ export async function getActiveFires(input: GetActiveFiresInput = {}): Promise<C
 
         return markers;
     } catch (error) {
-        console.error("Failed to fetch FIRMS data:", error);
-        // Return mock data as fallback
         return getMockFireData(input);
     }
 }

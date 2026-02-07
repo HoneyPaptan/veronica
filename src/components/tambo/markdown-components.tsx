@@ -86,14 +86,13 @@ const CodeHeader = ({
       timeoutRef.current = null;
     }
 
-    try {
-      await navigator.clipboard.writeText(code);
-      setCopied(true);
-      setError(false);
-    } catch (err) {
-      console.error("Failed to copy code to clipboard:", err);
-      setError(true);
-    }
+      try {
+        await navigator.clipboard.writeText(code);
+        setCopied(true);
+        setError(false);
+      } catch (err) {
+        setError(true);
+      }
     timeoutRef.current = setTimeout(() => setError(false), 2000);
   };
 

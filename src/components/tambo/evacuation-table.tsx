@@ -286,7 +286,6 @@ export function EvacuationTable(props: EvacuationTableProps) {
       </div>
     );
   } catch (error) {
-    console.error('Error rendering EvacuationTable:', error);
     toast.error("Error displaying evacuation data", {
       description: "Please try clicking 'Plan Evacuation' again from the map",
     });

@@ -51,7 +51,6 @@ function ThreadPersistence() {
         // Don't save if the last message has an error (cancelled/failed state)
         const lastMessage = thread.messages[thread.messages.length - 1];
         if (lastMessage?.error) {
-            console.log('Not saving thread - last message has error');
             return;
         }
 
@@ -63,8 +62,6 @@ function ThreadPersistence() {
         if (messagesSignature !== lastSavedRef.current && validMessages.length > 0) {
             lastSavedRef.current = messagesSignature;
 
-            // Save thread data to localStorage (only valid messages)
-            console.log('Saving thread to localStorage:', validMessages.length, 'messages');
             saveThreadData(thread.id, validMessages);
         }
     }, [thread?.messages, thread?.id, isIdle]);
@@ -89,7 +86,6 @@ function MapQueryHandler() {
                 try {
                     await submit({ streamResponse: true });
                 } catch (error) {
-                    console.error('Failed to submit map query:', error);
                 }
                 // Clear the pending query
                 setPendingQuery(null);

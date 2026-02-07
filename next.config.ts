@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  devIndicators: false,
   // Stub optional peer deps from @standard-community/standard-json
   webpack: (config) => {
     config.resolve.alias = {

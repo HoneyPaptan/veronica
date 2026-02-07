@@ -678,17 +678,6 @@ export function TacticalMap({
   const safeHighlightRegions = Array.isArray(highlightRegions) ? highlightRegions : [];
   const safeRegionName = typeof regionName === 'string' && regionName.length > 0 ? regionName : undefined;
 
-  // Debug logging
-  console.log('TacticalMap received:', {
-    markersCount: safeMarkers.length,
-    markers: safeMarkers.slice(0, 2), // Log first 2 markers for debugging
-    flyToMarkers,
-    enableClustering,
-    regionName: safeRegionName,
-    centerLatitude: safeCenterLatitude,
-    centerLongitude: safeCenterLongitude,
-  });
-
   const mapRef = useRef<MapRef>(null);
   const [clusterPopup, setClusterPopup] = useState<{
     longitude: number;
@@ -722,15 +711,18 @@ export function TacticalMap({
     // Safely handle relatedNews - it might be null, undefined, or not an array
     const relatedNewsArray = Array.isArray(marker.relatedNews) ? marker.relatedNews : [];
 
-    const articles: NewsArticle[] = relatedNewsArray.map((item) => ({
-      id: item.id,
-      title: item.title,
-      url: item.url,
-      source: item.source,
-      snippet: item.snippet,
-      publishedAt: item.publishedAt,
-      image: item.image,
-    }));
+    // Filter out items with invalid/missing data
+    const articles: NewsArticle[] = relatedNewsArray
+      .filter(item => item && typeof item.title === 'string' && item.title.trim().length > 0)
+      .map((item) => ({
+        id: item.id || "",
+        title: item.title || "Untitled Article",
+        url: item.url,
+        source: item.source,
+        snippet: item.snippet,
+        publishedAt: item.publishedAt,
+        image: item.image,
+      }));
 
     // If no related news, create one from the marker itself
     if (articles.length === 0) {
@@ -769,33 +761,6 @@ export function TacticalMap({
   // Safe spot markers and all accumulated markers are displayed without limit.
   const filteredMarkers = safeMarkers.filter(isValidMarker);
   const validMarkers = filteredMarkers;
-
-  // Debug: Log marker validation results
-  if (safeMarkers.length > 0) {
-    const safeSpotMarkers = safeMarkers.filter(m => m.markerStyle === "safeSpot");
-    console.log('Marker validation:', {
-      received: safeMarkers.length,
-      valid: filteredMarkers.length,
-      displayed: validMarkers.length,
-      safeSpotCount: safeSpotMarkers.length,
-      firstSafeSpot: safeSpotMarkers[0] ? {
-        id: safeSpotMarkers[0].id,
-        title: safeSpotMarkers[0].title,
-        lat: safeSpotMarkers[0].latitude,
-        lng: safeSpotMarkers[0].longitude,
-        markerStyle: safeSpotMarkers[0].markerStyle,
-        safeSpotType: safeSpotMarkers[0].safeSpotType,
-      } : 'none',
-      firstMarkerCoords: validMarkers[0] ? { lat: validMarkers[0].latitude, lng: validMarkers[0].longitude } : 'none',
-      invalidMarkers: safeMarkers.filter(m => !isValidMarker(m)).map(m => ({ id: m?.id, lat: (m as any)?.latitude, lng: (m as any)?.longitude }))
-    });
-  }
-
-  if (validMarkers.length > 0) {
-    console.info(
-      `TacticalMap: ${validMarkers.length} markers displayed (${validMarkers.filter(m => m.markerStyle === "safeSpot").length} safe spots)`
-    );
-  }
 
   // Optional region highlight when we only have a coarse location string (Tavily-style)
   const regionFromProp = resolveRegionFromName(safeRegionName);
@@ -928,7 +893,6 @@ export function TacticalMap({
     const map = mapRef.current;
 
     const setupCamera = () => {
-      console.log('🌍 Setting up 3D camera angle...');
       map.easeTo({
         pitch: 50,
         bearing: 0,
@@ -957,19 +921,15 @@ export function TacticalMap({
     const handleZoom = () => {
       const zoom = map.getZoom();
 
-      // Switch to flat mercator when zoomed in (zoom > 5)
-      // Keep globe when zoomed out (zoom <= 5)
       if (zoom > 5) {
         const currentProjection = (map as any).getProjection();
         if (currentProjection?.name === "globe") {
-          console.log('📍 Switching to flat mercator projection');
           (map as any).setProjection({ name: "mercator" });
           map.easeTo({ pitch: 0, duration: 800 });
         }
       } else {
         const currentProjection = (map as any).getProjection();
         if (currentProjection?.name !== "globe") {
-          console.log('🌍 Switching to globe projection');
           (map as any).setProjection({ name: "globe" });
           map.easeTo({ pitch: 50, duration: 800 });
         }
@@ -1444,24 +1404,13 @@ function TacticalMapAccumulator(props: TacticalMapProps & { _isSelectMode?: bool
   const { markers: tamboMarkers, ...restProps } = props;
   const { accumulatedMarkers, setAccumulatedMarkers } = useMapChatContext();
 
-  // Debug: Log what Tambo is sending
-  console.log('🔍 TacticalMapAccumulator render:', {
-    tamboMarkersCount: tamboMarkers?.length || 0,
-    accumulatedCount: accumulatedMarkers.length,
-    tamboMarkers: tamboMarkers,
-  });
-
-  // When Tambo sends new markers, accumulate them IMMEDIATELY
-  // Use a ref to track whether we've processed these specific markers
   const processedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!tamboMarkers || tamboMarkers.length === 0) {
-      console.log('⏭️ No markers from Tambo, skipping');
       return;
     }
 
-    // Filter out already-processed markers and validate
     const newMarkers = tamboMarkers.filter(m => {
       if (processedRef.current.has(m.id)) {
         return false;
@@ -1473,24 +1422,14 @@ function TacticalMapAccumulator(props: TacticalMapProps & { _isSelectMode?: bool
       return;
     }
 
-    console.log('✅ Adding', newMarkers.length, 'markers (IDs:', newMarkers.map(m => m.id).join(', '), ')');
-
-    // Mark these as processed
     newMarkers.forEach(m => processedRef.current.add(m.id));
 
-    // Add to accumulated markers (use functional update to avoid dependency)
     setAccumulatedMarkers(prev => {
       const updated = [...prev, ...newMarkers];
-      console.log('📍 Total accumulated markers:', updated.length);
       return updated;
     });
   }, [tamboMarkers]);
 
-  // Log what we're rendering
-  console.log('🎨 Rendering TacticalMap with', accumulatedMarkers.length, 'markers:', accumulatedMarkers.map(m => ({ id: m.id, title: m.title, lat: m.latitude, lng: m.longitude, style: m.markerStyle })));
-
-  // Always render with accumulated markers
-  console.log('🎨 Rendering TacticalMap with', accumulatedMarkers.length, 'accumulated markers');
   return <TacticalMap {...restProps} markers={accumulatedMarkers} />;
 }
 

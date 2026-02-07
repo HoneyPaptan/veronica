@@ -160,7 +160,6 @@ function MessageErrorDisplay({
         await submit({ streamResponse: true });
       }
     } catch (error) {
-      console.error('Retry failed:', error);
     } finally {
       setIsRetrying(false);
     }

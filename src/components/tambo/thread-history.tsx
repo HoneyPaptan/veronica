@@ -243,7 +243,6 @@ const ThreadHistoryNewButton = React.forwardRef<
         await refetch();
         onThreadChange?.();
       } catch (error) {
-        console.error("Failed to create new thread:", error);
       }
     },
     [startNewThread, refetch, onThreadChange],
@@ -435,7 +434,6 @@ const ThreadHistoryList = React.forwardRef<
       switchCurrentThread(threadId);
       onThreadChange?.();
     } catch (error) {
-      console.error("Failed to switch thread:", error);
     }
   };
 
@@ -449,7 +447,6 @@ const ThreadHistoryList = React.forwardRef<
       await generateThreadName(thread.id);
       await refetch();
     } catch (error) {
-      console.error("Failed to generate name:", error);
     }
   };
 
@@ -462,7 +459,6 @@ const ThreadHistoryList = React.forwardRef<
       await refetch();
       setEditingThread(null);
     } catch (error) {
-      console.error("Failed to rename thread:", error);
     }
   };
 

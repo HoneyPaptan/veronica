@@ -31,34 +31,20 @@ function SettingsPanelBase(props: SettingsProps) {
   // Update local state when props change from Tambo
   useEffect(() => {
     const prevProps = prevPropsRef.current;
-    console.log("Props effect triggered");
-    console.log("Previous props:", prevProps);
-    console.log("Current props:", props);
 
-    // Find which fields changed
     const changedFields = new Set<string>();
 
-    // Check each field for changes
     if (props.name !== prevProps.name) {
       changedFields.add("name");
-      console.log("Name changed:", prevProps.name, "->", props.name);
     }
     if (props.email !== prevProps.email) {
       changedFields.add("email");
-      console.log("Email changed:", prevProps.email, "->", props.email);
     }
     if (props.theme !== prevProps.theme) {
       changedFields.add("theme");
-      console.log("Theme changed:", prevProps.theme, "->", props.theme);
     }
     if (props.language !== prevProps.language) {
       changedFields.add("language");
-      console.log(
-        "Language changed:",
-        prevProps.language,
-        "->",
-        props.language,
-      );
     }
 
     // Check notification fields
@@ -83,18 +69,13 @@ function SettingsPanelBase(props: SettingsProps) {
       changedFields.add("privacy.personalizationEnabled");
     }
 
-    console.log("Changed fields:", Array.from(changedFields));
-
-    // Update state and ref
     setSettings(props);
     prevPropsRef.current = props;
 
     if (changedFields.size > 0) {
       setUpdatedFields(changedFields);
-      // Clear highlights after animation
       const timer = setTimeout(() => {
         setUpdatedFields(new Set());
-        console.log("Cleared animation fields");
       }, 1000);
       return () => clearTimeout(timer);
     }
@@ -375,7 +356,6 @@ export function SettingsPanel() {
         personalizationEnabled: true,
       }}
       onPropsUpdate={(newProps) => {
-        console.log("Settings updated from Tambo:", newProps);
       }}
     />
   );
