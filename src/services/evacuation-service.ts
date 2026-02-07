@@ -1,86 +1,66 @@
 /**
  * @file evacuation-service.ts
- * @description Optimized service for planning evacuation routes from crisis locations
+ * @description Simplified service for finding nearby safe spots during crises
  * 
- * OPTIMIZED VERSION:
- * - Finds only ONE best safe spot for routing (prioritizes hospitals)
- * - Samples route coordinates to reduce payload size
- * - Returns list of ALL safe spots for table display
- * - Minimal data transfer to prevent streaming errors
+ * SIMPLIFIED VERSION:
+ * - Finds up to 5 nearest safe spots (hospitals, shelters, schools, airports, parks)
+ * - Returns markers compatible with crisisMarkerSchema
+ * - No complex routes - just markers on the map
  */
 
 import { z } from "zod";
+import type { CrisisMarker } from "@/lib/markers";
 
 // Safe spot types that can be evacuation destinations
 export type SafeSpotType = "hospital" | "park" | "airport" | "shelter" | "school";
 
-// Schema for a safe spot location - using string for type to match component schema
+// Schema for a safe spot location
 export const safeSpotSchema = z.object({
   id: z.string(),
   name: z.string(),
-  type: z.string(), // Changed from enum to string for JSON Schema compatibility
+  type: z.string(),
   latitude: z.number(),
   longitude: z.number(),
-  distance: z.number().describe("Distance from crisis in kilometers"),
-  capacity: z.string().optional().describe("Capacity info if available"),
+  distance: z.number(),
   address: z.string().optional(),
   phone: z.string().optional(),
 });
 
 export type SafeSpot = z.infer<typeof safeSpotSchema>;
 
-// Compact route schema - samples coordinates to reduce size
-export const compactRouteSchema = z.object({
-  id: z.string(),
-  crisisId: z.string(),
-  crisisName: z.string(),
-  toSafeSpotId: z.string(),
-  toSafeSpotName: z.string(),
-  toSafeSpotType: z.string(), // Changed from enum to string for JSON Schema compatibility
-  // Sampled coordinates (every Nth point) to reduce payload
-  coordinates: z.array(z.tuple([z.number(), z.number()])),
-  totalPoints: z.number().describe("Original number of coordinate points before sampling"),
-  distance: z.number().describe("Route distance in kilometers"),
-  duration: z.number().describe("Estimated duration in minutes"),
-  color: z.string(),
-});
-
-export type CompactRoute = z.infer<typeof compactRouteSchema>;
-
-// Schema for evacuation plan response - OPTIMIZED
-export const evacuationPlanSchema = z.object({
-  crisisId: z.string(),
-  crisisTitle: z.string(),
-  crisisLatitude: z.number(),
-  crisisLongitude: z.number(),
-  // ALL safe spots for table display
-  allSafeSpots: z.array(safeSpotSchema),
-  // ONLY ONE route to the best safe spot (for map display)
-  primaryRoute: compactRouteSchema.nullable(),
-  // Best safe spot details
-  bestSafeSpot: safeSpotSchema.nullable(),
-  summary: z.string().describe("Human-readable summary"),
-});
-
-export type EvacuationPlan = z.infer<typeof evacuationPlanSchema>;
-
 // Priority order for safe spot types (hospital is best for emergencies)
 const SAFE_SPOT_PRIORITY: SafeSpotType[] = ["hospital", "shelter", "school", "airport", "park"];
 
+// Glow colors for each safe spot type
+const GLOW_COLORS: Record<SafeSpotType, { gradient: string; glow: string }> = {
+  hospital: { gradient: "from-red-500 to-red-600", glow: "shadow-red-500/50" },
+  shelter: { gradient: "from-amber-500 to-amber-600", glow: "shadow-amber-500/50" },
+  school: { gradient: "from-purple-500 to-purple-600", glow: "shadow-purple-500/50" },
+  airport: { gradient: "from-blue-500 to-blue-600", glow: "shadow-blue-500/50" },
+  park: { gradient: "from-green-500 to-green-600", glow: "shadow-green-500/50" },
+};
+
+// Icon components for each type
+const ICONS: Record<SafeSpotType, string> = {
+  hospital: "🏥",
+  shelter: "🏠",
+  school: "🏫",
+  airport: "✈️",
+  park: "🌳",
+};
+
 /**
  * Query Overpass API for nearby safe spots
- * LIMITED search to prevent too many results
  */
 async function findSafeSpots(
   latitude: number,
   longitude: number,
-  radius: number = 30000 // Reduced to 30km for faster response
+  radius: number = 20000
 ): Promise<SafeSpot[]> {
   const safeSpots: SafeSpot[] = [];
-  
-  // Simplified Overpass query - only essential data
+
   const overpassQuery = `
-    [out:json][timeout:15];
+    [out:json][timeout:10];
     (
       node["amenity"="hospital"](around:${radius},${latitude},${longitude});
       way["amenity"="hospital"](around:${radius},${latitude},${longitude});
@@ -90,7 +70,7 @@ async function findSafeSpots(
       node["aeroway"="aerodrome"](around:${radius},${latitude},${longitude});
       node["leisure"="park"](around:${radius},${latitude},${longitude});
     );
-    out center 20;
+    out center 15;
   `;
 
   try {
@@ -106,7 +86,7 @@ async function findSafeSpots(
 
     for (const element of data.elements) {
       const tags = element.tags || {};
-      
+
       let type: SafeSpotType = "shelter";
       if (tags.amenity === "hospital" || tags.amenity === "clinic") type = "hospital";
       else if (tags.amenity === "shelter") type = "shelter";
@@ -132,13 +112,12 @@ async function findSafeSpots(
         latitude: lat,
         longitude: lon,
         distance: Math.round(distance * 10) / 10,
-        capacity: tags.capacity || tags.beds,
         address: tags["addr:street"],
         phone: tags.phone,
       });
     }
 
-    // Sort by priority (hospitals first) then by distance
+    // Sort by priority then distance
     safeSpots.sort((a, b) => {
       const priorityA = SAFE_SPOT_PRIORITY.indexOf(a.type as SafeSpotType);
       const priorityB = SAFE_SPOT_PRIORITY.indexOf(b.type as SafeSpotType);
@@ -146,7 +125,7 @@ async function findSafeSpots(
       return a.distance - b.distance;
     });
 
-    return safeSpots;
+    return safeSpots.slice(0, 5);
 
   } catch (error) {
     console.error("Error finding safe spots:", error);
@@ -155,54 +134,7 @@ async function findSafeSpots(
 }
 
 /**
- * Calculate route using OSRM with coordinate sampling
- * Returns COMPACT route data with sampled coordinates
- */
-async function calculateCompactRoute(
-  fromLat: number,
-  fromLon: number,
-  toLat: number,
-  toLon: number,
-  sampleInterval: number = 10 // Keep every 10th coordinate point
-): Promise<{ coordinates: [number, number][]; totalPoints: number; distance: number; duration: number } | null> {
-  try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${fromLon},${fromLat};${toLon},${toLat}?overview=full&geometries=geojson`;
-    
-    const response = await fetch(url);
-    if (!response.ok) return null;
-
-    const data = await response.json();
-    if (!data.routes || data.routes.length === 0) return null;
-
-    const route = data.routes[0];
-    const allCoordinates = route.geometry.coordinates as [number, number][];
-    
-    // SAMPLE coordinates to reduce payload size
-    // Always keep first and last, sample in between
-    const sampledCoordinates: [number, number][] = [];
-    for (let i = 0; i < allCoordinates.length; i += sampleInterval) {
-      sampledCoordinates.push(allCoordinates[i]);
-    }
-    // Always ensure last point is included
-    if (sampledCoordinates[sampledCoordinates.length - 1] !== allCoordinates[allCoordinates.length - 1]) {
-      sampledCoordinates.push(allCoordinates[allCoordinates.length - 1]);
-    }
-
-    return {
-      coordinates: sampledCoordinates,
-      totalPoints: allCoordinates.length,
-      distance: Math.round((route.distance / 1000) * 10) / 10,
-      duration: Math.round(route.duration / 60),
-    };
-
-  } catch (error) {
-    console.error("Error calculating route:", error);
-    return null;
-  }
-}
-
-/**
- * Calculate distance between two coordinates
+ * Calculate distance between two coordinates (Haversine formula)
  */
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371;
@@ -220,156 +152,64 @@ function toRadians(degrees: number): number {
 }
 
 /**
- * OPTIMIZED evacuation planning - finds ONE best route + list of all options
+ * Find safe spots near a crisis location
+ * Returns markers compatible with crisisMarkerSchema
  */
-export async function planEvacuation(
+export async function findEvacuationSpots(
   crisisId: string,
   crisisTitle: string,
   crisisLatitude: number,
   crisisLongitude: number,
-  options: {
-    searchRadius?: number;
-    sampleInterval?: number; // Coordinate sampling rate
-  } = {}
-): Promise<EvacuationPlan> {
-  const { searchRadius = 30000, sampleInterval = 10 } = options;
+  options: { searchRadius?: number } = {}
+): Promise<{
+  crisisId: string;
+  crisisTitle: string;
+  crisisLatitude: number;
+  crisisLongitude: number;
+  safeSpots: SafeSpot[];
+  markers: CrisisMarker[];
+  summary: string;
+  found: boolean;
+}> {
+  const { searchRadius = 20000 } = options;
 
-  console.log(`🚨 Evacuation planning: ${crisisTitle} at ${crisisLatitude}, ${crisisLongitude}`);
+  console.log(`🚨 Finding safe spots: ${crisisTitle} at ${crisisLatitude}, ${crisisLongitude}`);
 
-  // Find safe spots (limited query)
-  const allSafeSpots = await findSafeSpots(crisisLatitude, crisisLongitude, searchRadius);
-  
-  console.log(`🏥 Found ${allSafeSpots.length} safe spots`);
+  const safeSpots = await findSafeSpots(crisisLatitude, crisisLongitude, searchRadius);
 
-  // Get the BEST safe spot (first one after sorting by priority + distance)
-  const bestSafeSpot = allSafeSpots[0] || null;
-  
-  // Calculate route ONLY to the best safe spot
-  let primaryRoute: CompactRoute | null = null;
-  
-  if (bestSafeSpot) {
-    console.log(`🛣️ Calculating route to ${bestSafeSpot.name} (${bestSafeSpot.type})`);
+  console.log(`🏥 Found ${safeSpots.length} safe spots`);
+
+  // Convert to CrisisMarker array
+  const markers: CrisisMarker[] = safeSpots.map((spot, index) => {
+    const safeType = spot.type as SafeSpotType;
+    const glowColors = GLOW_COLORS[safeType];
     
-    const routeData = await calculateCompactRoute(
-      crisisLatitude,
-      crisisLongitude,
-      bestSafeSpot.latitude,
-      bestSafeSpot.longitude,
-      sampleInterval
-    );
-
-    if (routeData) {
-      primaryRoute = {
-        id: `route-${crisisId}-${bestSafeSpot.id}`,
-        crisisId,
-        crisisName: crisisTitle,
-        toSafeSpotId: bestSafeSpot.id,
-        toSafeSpotName: bestSafeSpot.name,
-        toSafeSpotType: bestSafeSpot.type,
-        coordinates: routeData.coordinates,
-        totalPoints: routeData.totalPoints,
-        distance: routeData.distance,
-        duration: routeData.duration,
-        color: getRouteColor(bestSafeSpot.type as SafeSpotType),
-      };
-      
-      console.log(`✅ Route calculated: ${routeData.distance}km, ${routeData.duration}min (${routeData.totalPoints} -> ${routeData.coordinates.length} points)`);
-    }
-  }
+    return {
+      id: `${crisisId}-safe-${index}`,
+      title: spot.name,
+      description: `${ICONS[safeType]} ${safeType.toUpperCase()} - ${spot.distance}km away${spot.address ? ` | ${spot.address}` : ""}`,
+      latitude: spot.latitude,
+      longitude: spot.longitude,
+      category: "other",
+      markerStyle: "safeSpot",
+      safeSpotType: safeType,
+      distance: spot.distance,
+    };
+  });
 
   // Generate summary
-  const summary = generateEvacuationSummary(crisisTitle, allSafeSpots, primaryRoute);
+  const summary = safeSpots.length > 0
+    ? `Found ${safeSpots.length} safe location(s) near ${crisisTitle}. Nearest: ${safeSpots[0].name} (${safeSpots[0].type}) - ${safeSpots[0].distance}km away.`
+    : `No safe locations found within 20km of ${crisisTitle}. Please contact emergency services: 112 (universal emergency number).`;
 
   return {
     crisisId,
     crisisTitle,
     crisisLatitude,
     crisisLongitude,
-    allSafeSpots,
-    primaryRoute,
-    bestSafeSpot,
+    safeSpots,
+    markers,
     summary,
-  };
-}
-
-/**
- * Get route color based on safe spot type
- */
-function getRouteColor(type: SafeSpotType): string {
-  const colors: Record<SafeSpotType, string> = {
-    hospital: "#ef4444",
-    park: "#22c55e",
-    airport: "#3b82f6",
-    shelter: "#f59e0b",
-    school: "#8b5cf6",
-  };
-  return colors[type] || "#3b82f6";
-}
-
-/**
- * Generate summary
- */
-function generateEvacuationSummary(
-  crisisTitle: string,
-  allSafeSpots: SafeSpot[],
-  primaryRoute: CompactRoute | null
-): string {
-  if (!primaryRoute || allSafeSpots.length === 0) {
-    return `No evacuation routes available for ${crisisTitle}. Contact emergency services immediately.`;
-  }
-
-  const hospitals = allSafeSpots.filter(s => s.type === "hospital").length;
-  const shelters = allSafeSpots.filter(s => s.type === "shelter").length;
-  const schools = allSafeSpots.filter(s => s.type === "school").length;
-  const airports = allSafeSpots.filter(s => s.type === "airport").length;
-  const parks = allSafeSpots.filter(s => s.type === "park").length;
-
-  return `Evacuation plan for ${crisisTitle}: Best route is to ${primaryRoute.toSafeSpotName} (${primaryRoute.toSafeSpotType}) - ${primaryRoute.distance}km, ${primaryRoute.duration} min. ${allSafeSpots.length} total safe locations available (${hospitals} hospitals, ${shelters} shelters, ${schools} schools, ${airports} airports, ${parks} parks).`;
-}
-
-/**
- * Convert ALL safe spots to markers for table display
- */
-export function safeSpotsToMarkers(
-  safeSpots: SafeSpot[],
-  crisisId: string
-): Array<{
-  id: string;
-  title: string;
-  description: string;
-  latitude: number;
-  longitude: number;
-  category: "other";
-  severity?: "low" | "medium" | "high" | "critical";
-}> {
-  return safeSpots.map(spot => ({
-    id: `${crisisId}-safe-${spot.id}`,
-    title: spot.name,
-    description: `${spot.type.toUpperCase()} - ${spot.distance}km away${spot.address ? ` | ${spot.address}` : ""}${spot.phone ? ` | ${spot.phone}` : ""}`,
-    latitude: spot.latitude,
-    longitude: spot.longitude,
-    category: "other" as const,
-    severity: "low" as const,
-  }));
-}
-
-/**
- * Convert primary route to map route format
- */
-export function compactRouteToMapRoute(
-  route: CompactRoute
-): {
-  id: string;
-  coordinates: [number, number][];
-  color: string;
-  width: number;
-  label: string;
-} {
-  return {
-    id: route.id,
-    coordinates: route.coordinates,
-    color: route.color,
-    width: 4,
-    label: `${route.crisisName} → ${route.toSafeSpotName} (${route.distance}km, ${route.duration}min)`,
+    found: safeSpots.length > 0,
   };
 }

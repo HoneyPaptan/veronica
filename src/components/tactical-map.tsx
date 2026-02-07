@@ -25,7 +25,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { NewsDialog, type NewsArticle } from "@/components/news-dialog";
-import { ExternalLink, MousePointer2, X, MapPin, Crosshair } from "lucide-react";
+import { ExternalLink, MousePointer2, X, MapPin, Crosshair, Hospital, Trees, Plane, Home, GraduationCap } from "lucide-react";
 
 import {
   crisisMarkerSchema,
@@ -39,15 +39,30 @@ import { Ambulance } from "lucide-react";
  * Schema for the TacticalMap component props that Tambo AI can control
  */
 
+// Helper to handle null values from Tambo streaming - null -> default before validation
+const safeRouteString = (defaultValue: string = "") =>
+  z.preprocess(
+    (val) => (val === null || val === undefined) ? defaultValue : val,
+    z.string()
+  );
+
+const safeRouteNumber = (defaultValue: number = 0) =>
+  z.preprocess(
+    (val) => (val === null || val === undefined) ? defaultValue : val,
+    z.number()
+  );
+
 // Route schema for drawing routes on the map (simple format like mapcn)
+// All fields use preprocess to convert null -> default values for streaming
 export const routeSchema = z.object({
-  id: z.string().describe("Unique identifier for the route"),
-  coordinates: z
-    .array(z.tuple([z.number(), z.number()]))
-    .describe("Array of [longitude, latitude] coordinate pairs defining the route path"),
-  color: z.string().optional().describe("Route line color (hex or CSS color)"),
-  width: z.number().optional().describe("Route line width in pixels"),
-  label: z.string().optional().describe("Label for the route"),
+  id: safeRouteString("").describe("Unique identifier for the route"),
+  coordinates: z.preprocess(
+    (val) => (val === null || val === undefined || !Array.isArray(val)) ? [] : val,
+    z.array(z.tuple([z.number(), z.number()]))
+  ).describe("Array of [longitude, latitude] coordinate pairs defining the route path"),
+  color: safeRouteString("#3b82f6").describe("Route line color (hex or CSS color)"),
+  width: safeRouteNumber(4).describe("Route line width in pixels"),
+  label: safeRouteString("").describe("Label for the route"),
 });
 
 export type Route = z.infer<typeof routeSchema>;
@@ -160,6 +175,58 @@ function getSeverityColor(severity?: CrisisMarker["severity"]): string {
     critical: "bg-red-500",
   };
   return colors[severity] || "bg-gray-500";
+}
+
+/**
+ * Safe spot marker styling - glowing markers like mapcn trending example
+ */
+type SafeSpotType = "hospital" | "park" | "airport" | "shelter" | "school";
+
+function getSafeSpotStyle(type?: SafeSpotType): { outerRing: string; innerRing: string; glow: string; gradient: string } {
+  const styles: Record<SafeSpotType, { outerRing: string; innerRing: string; glow: string; gradient: string }> = {
+    hospital: {
+      outerRing: "bg-red-500/30",
+      innerRing: "bg-red-500/40",
+      glow: "shadow-red-500/50",
+      gradient: "from-red-500 to-rose-600",
+    },
+    park: {
+      outerRing: "bg-green-500/30",
+      innerRing: "bg-green-500/40",
+      glow: "shadow-green-500/50",
+      gradient: "from-green-500 to-emerald-600",
+    },
+    airport: {
+      outerRing: "bg-blue-500/30",
+      innerRing: "bg-blue-500/40",
+      glow: "shadow-blue-500/50",
+      gradient: "from-blue-500 to-sky-600",
+    },
+    shelter: {
+      outerRing: "bg-amber-500/30",
+      innerRing: "bg-amber-500/40",
+      glow: "shadow-amber-500/50",
+      gradient: "from-amber-500 to-orange-600",
+    },
+    school: {
+      outerRing: "bg-violet-500/30",
+      innerRing: "bg-violet-500/40",
+      glow: "shadow-violet-500/50",
+      gradient: "from-violet-500 to-purple-600",
+    },
+  };
+  return styles[type || "shelter"] || styles.shelter;
+}
+
+function getSafeSpotIcon(type?: SafeSpotType) {
+  switch (type) {
+    case "hospital": return Hospital;
+    case "park": return Trees;
+    case "airport": return Plane;
+    case "shelter": return Home;
+    case "school": return GraduationCap;
+    default: return Home;
+  }
 }
 
 function resolveRegionFromName(name?: string) {
@@ -322,17 +389,17 @@ function MapStyleSelector() {
 
   const handleStyleChange = (newStyle: typeof style) => {
     if (!map) return;
-    
+
     setStyle(newStyle);
-    
+
     const styleUrl = styles[newStyle];
     const is3D = newStyle === "openstreetmap3d";
-    
+
     // Change map style if not default
     if (styleUrl) {
       map.setStyle(styleUrl);
     }
-    
+
     // Adjust pitch for 3D view
     map.easeTo({ pitch: is3D ? 60 : 0, duration: 500 });
   };
@@ -698,16 +765,27 @@ export function TacticalMap({
   };
 
   // Normalize and filter out invalid markers to prevent runtime errors.
-  // Limit to 20 markers max for performance and clarity.
+  // Note: Crisis marker limiting is done at the API level (NASA FIRMS returns max 20).
+  // Safe spot markers and all accumulated markers are displayed without limit.
   const filteredMarkers = safeMarkers.filter(isValidMarker);
-  const validMarkers = filteredMarkers.slice(0, 20);
+  const validMarkers = filteredMarkers;
 
   // Debug: Log marker validation results
   if (safeMarkers.length > 0) {
+    const safeSpotMarkers = safeMarkers.filter(m => m.markerStyle === "safeSpot");
     console.log('Marker validation:', {
       received: safeMarkers.length,
       valid: filteredMarkers.length,
       displayed: validMarkers.length,
+      safeSpotCount: safeSpotMarkers.length,
+      firstSafeSpot: safeSpotMarkers[0] ? {
+        id: safeSpotMarkers[0].id,
+        title: safeSpotMarkers[0].title,
+        lat: safeSpotMarkers[0].latitude,
+        lng: safeSpotMarkers[0].longitude,
+        markerStyle: safeSpotMarkers[0].markerStyle,
+        safeSpotType: safeSpotMarkers[0].safeSpotType,
+      } : 'none',
       firstMarkerCoords: validMarkers[0] ? { lat: validMarkers[0].latitude, lng: validMarkers[0].longitude } : 'none',
       invalidMarkers: safeMarkers.filter(m => !isValidMarker(m)).map(m => ({ id: m?.id, lat: (m as any)?.latitude, lng: (m as any)?.longitude }))
     });
@@ -715,8 +793,7 @@ export function TacticalMap({
 
   if (validMarkers.length > 0) {
     console.info(
-      `TacticalMap: ${validMarkers.length} markers${filteredMarkers.length > 20 ? ` (limited from ${filteredMarkers.length})` : ""
-      }`
+      `TacticalMap: ${validMarkers.length} markers displayed (${validMarkers.filter(m => m.markerStyle === "safeSpot").length} safe spots)`
     );
   }
 
@@ -795,7 +872,7 @@ export function TacticalMap({
   }, [shouldFlyToMarkers, validMarkers.length]);
 
   // Track if center/zoom was explicitly set by Tambo
-  const prevCenterRef = useRef<{lat: number, lng: number, zoom: number} | null>(null);
+  const prevCenterRef = useRef<{ lat: number, lng: number, zoom: number } | null>(null);
 
   // Only fly to center when Tambo explicitly changes centerLatitude/centerLongitude/zoomLevel
   // Don't fly on initial render or when just interacting with the map
@@ -815,7 +892,7 @@ export function TacticalMap({
     }
 
     // Only fly if Tambo explicitly changed the center/zoom
-    const centerChanged = 
+    const centerChanged =
       prevCenterRef.current.lat !== currentCenter.lat ||
       prevCenterRef.current.lng !== currentCenter.lng ||
       prevCenterRef.current.zoom !== currentCenter.zoom;
@@ -847,9 +924,9 @@ export function TacticalMap({
   // Set initial camera angle for 3D globe view
   useEffect(() => {
     if (!mapRef.current) return;
-    
+
     const map = mapRef.current;
-    
+
     const setupCamera = () => {
       console.log('🌍 Setting up 3D camera angle...');
       map.easeTo({
@@ -858,14 +935,14 @@ export function TacticalMap({
         duration: 1000,
       });
     };
-    
+
     // Wait for map to load before adjusting camera
     if (map.loaded()) {
       setupCamera();
     } else {
       map.once('load', setupCamera);
     }
-    
+
     return () => {
       map.off('load', setupCamera);
     };
@@ -874,12 +951,12 @@ export function TacticalMap({
   // Handle zoom level changes to switch between globe and flat view
   useEffect(() => {
     if (!mapRef.current) return;
-    
+
     const map = mapRef.current;
-    
+
     const handleZoom = () => {
       const zoom = map.getZoom();
-      
+
       // Switch to flat mercator when zoomed in (zoom > 5)
       // Keep globe when zoomed out (zoom <= 5)
       if (zoom > 5) {
@@ -898,9 +975,9 @@ export function TacticalMap({
         }
       }
     };
-    
+
     map.on('zoom', handleZoom);
-    
+
     return () => {
       map.off('zoom', handleZoom);
     };
@@ -963,30 +1040,53 @@ export function TacticalMap({
               offset={[0, -12]}
             >
               <MarkerContent className="z-10 group cursor-pointer">
-                {/* Clean pin-style marker like mapcn examples */}
-                <div className="relative flex flex-col items-center">
-                  {/* Pin head - solid circle with border */}
-                  <div
-                    className={cn(
-                      "relative flex h-6 w-6 items-center justify-center rounded-full border-2 border-white shadow-lg transition-transform group-hover:scale-110",
-                      getMarkerColor(marker.category)
+                {/* Safe spot markers - use a different color pin */}
+                {marker.markerStyle === "safeSpot" ? (
+                  <div className="relative flex flex-col items-center">
+                    {/* Green pin for safe spots */}
+                    <div
+                      className={cn(
+                        "flex h-6 w-6 items-center justify-center rounded-full border-2 border-white shadow-lg transition-transform group-hover:scale-110",
+                        "bg-green-500"
+                      )}
+                      title={marker.title}
+                    >
+                      {/* Safe spot icon inside */}
+                      <span className="text-[10px]">🏥</span>
+                    </div>
+                    {/* Distance label */}
+                    {marker.distance && (
+                      <div className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-green-500/90 px-1.5 py-0.5 text-[10px] font-medium text-white shadow">
+                        {marker.distance}km
+                      </div>
                     )}
-                    title={marker.title}
-                  >
-                    {/* Inner dot for emphasis */}
-                    <div className="h-2 w-2 rounded-full bg-white/90" />
                   </div>
-                  {/* Pin point - triangle pointing down */}
-                  <div 
-                    className={cn(
-                      "w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] -mt-[1px]",
-                      getMarkerColor(marker.category).replace('bg-', 'border-t-')
-                    )}
-                    style={{
-                      filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
-                    }}
-                  />
-                </div>
+                ) : (
+                  // Regular pin-style marker
+                  <div className="relative flex flex-col items-center">
+                    {/* Pin head - solid circle with border */}
+                    <div
+                      className={cn(
+                        "flex h-6 w-6 items-center justify-center rounded-full border-2 border-white shadow-lg transition-transform group-hover:scale-110",
+                        getMarkerColor(marker.category)
+                      )}
+                      title={marker.title}
+                    >
+                      {/* Inner dot for emphasis */}
+                      <div className="h-2 w-2 rounded-full bg-white/90" />
+                    </div>
+                    {/* Pin point - triangle pointing down */}
+                    <div
+                      className={cn(
+                        "w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] -mt-[1px]",
+                        getMarkerColor(marker.category).replace('bg-', 'border-t-')
+                      )}
+                      style={{
+                        filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
+                      }}
+                    />
+                  </div>
+                )}
               </MarkerContent>
 
 
@@ -1002,7 +1102,7 @@ export function TacticalMap({
                       {marker.category}
                     </span>
                   </div>
-                  
+
                   {/* Title */}
                   <div className="px-4 pb-3">
                     <h3 className="text-base font-semibold text-foreground leading-tight line-clamp-2">
@@ -1026,7 +1126,7 @@ export function TacticalMap({
                       <ExternalLink className="h-4 w-4" />
                       View Details
                     </button>
-                    
+
                     {/* Plan Evacuation button - only for crisis categories */}
                     {['wildfire', 'volcano', 'earthquake', 'flood', 'storm'].includes(marker.category) && (
                       <button
@@ -1105,6 +1205,8 @@ export function TacticalMap({
                       source: clusterPopup.properties.source,
                       url: clusterPopup.properties.url,
                       relatedNews: clusterPopup.properties.relatedNews,
+                      markerStyle: "default",
+                      safeSpotType: "hospital",
                     };
                     openNewsModal(markerData);
                     setClusterPopup(null);
@@ -1132,6 +1234,8 @@ export function TacticalMap({
                         source: clusterPopup.properties.source,
                         url: clusterPopup.properties.url,
                         relatedNews: clusterPopup.properties.relatedNews,
+                        markerStyle: "default",
+                        safeSpotType: "hospital",
                       };
                       requestEvacuationPlan(markerData);
                       setClusterPopup(null);
@@ -1149,15 +1253,17 @@ export function TacticalMap({
 
         {/* Render routes if provided - simple format like mapcn */}
         {safeRoutes.length > 0 &&
-          safeRoutes.map((route) => (
-            <MapRoute
-              key={route.id}
-              id={route.id}
-              coordinates={route.coordinates}
-              color={route.color || "#3b82f6"}
-              width={route.width || 4}
-            />
-          ))}
+          safeRoutes
+            .filter(route => route && Array.isArray(route.coordinates) && route.coordinates.length >= 2)
+            .map((route) => (
+              <MapRoute
+                key={route.id ?? `route-${Math.random()}`}
+                id={route.id ?? ""}
+                coordinates={route.coordinates ?? []}
+                color={route.color ?? "#3b82f6"}
+                width={route.width ?? 4}
+              />
+            ))}
 
         {/* Map click handler for select mode - must be inside Map to access context */}
         {_isSelectMode && _onLocationSelect && (
@@ -1336,7 +1442,7 @@ const BaseTacticalMap = withInteractable(TacticalMap, {
  */
 function TacticalMapAccumulator(props: TacticalMapProps & { _isSelectMode?: boolean; _onLocationSelect?: (location: SelectedLocation) => void }) {
   const { markers: tamboMarkers, ...restProps } = props;
-  const { addMarkers, accumulatedMarkers } = useMapChatContext();
+  const { accumulatedMarkers, setAccumulatedMarkers } = useMapChatContext();
 
   // Debug: Log what Tambo is sending
   console.log('🔍 TacticalMapAccumulator render:', {
@@ -1346,27 +1452,42 @@ function TacticalMapAccumulator(props: TacticalMapProps & { _isSelectMode?: bool
   });
 
   // When Tambo sends new markers, accumulate them IMMEDIATELY
+  // Use a ref to track whether we've processed these specific markers
+  const processedRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     if (!tamboMarkers || tamboMarkers.length === 0) {
       console.log('⏭️ No markers from Tambo, skipping');
       return;
     }
-    
-    const validNewMarkers = tamboMarkers.filter(isValidMarker);
-    console.log('🔍 Marker validation:', {
-      received: tamboMarkers.length,
-      valid: validNewMarkers.length,
-      categories: validNewMarkers.map(m => m.category),
-      ids: validNewMarkers.map(m => m.id),
+
+    // Filter out already-processed markers and validate
+    const newMarkers = tamboMarkers.filter(m => {
+      if (processedRef.current.has(m.id)) {
+        return false;
+      }
+      return isValidMarker(m);
     });
-    
-    if (validNewMarkers.length > 0) {
-      console.log('✅ ADDING markers from Tambo:', validNewMarkers.length, validNewMarkers);
-      addMarkers(validNewMarkers);
-    } else {
-      console.warn('⚠️ No valid markers to accumulate!', tamboMarkers);
+
+    if (newMarkers.length === 0) {
+      return;
     }
-  }, [tamboMarkers, addMarkers]);
+
+    console.log('✅ Adding', newMarkers.length, 'markers (IDs:', newMarkers.map(m => m.id).join(', '), ')');
+
+    // Mark these as processed
+    newMarkers.forEach(m => processedRef.current.add(m.id));
+
+    // Add to accumulated markers (use functional update to avoid dependency)
+    setAccumulatedMarkers(prev => {
+      const updated = [...prev, ...newMarkers];
+      console.log('📍 Total accumulated markers:', updated.length);
+      return updated;
+    });
+  }, [tamboMarkers]);
+
+  // Log what we're rendering
+  console.log('🎨 Rendering TacticalMap with', accumulatedMarkers.length, 'markers:', accumulatedMarkers.map(m => ({ id: m.id, title: m.title, lat: m.latitude, lng: m.longitude, style: m.markerStyle })));
 
   // Always render with accumulated markers
   console.log('🎨 Rendering TacticalMap with', accumulatedMarkers.length, 'accumulated markers');

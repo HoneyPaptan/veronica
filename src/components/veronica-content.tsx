@@ -33,9 +33,9 @@ import { Toaster, toast } from "sonner";
 interface MapChatContextType {
     pendingQuery: string | null;
     setPendingQuery: (query: string | null) => void;
-    // Accumulated markers from all searches
     accumulatedMarkers: CrisisMarker[];
     addMarkers: (markers: CrisisMarker[]) => void;
+    setAccumulatedMarkers: React.Dispatch<React.SetStateAction<CrisisMarker[]>>;
     clearAllData: () => void;
 }
 
@@ -44,6 +44,7 @@ export const MapChatContext = createContext<MapChatContextType>({
     setPendingQuery: () => { },
     accumulatedMarkers: [],
     addMarkers: () => { },
+    setAccumulatedMarkers: () => { },
     clearAllData: () => { },
 });
 
@@ -52,27 +53,64 @@ export function useMapChatContext() {
 }
 
 /**
+ * Provider that loads persisted data synchronously to avoid timing issues
+ */
+function MapChatProvider({ children }: { children: React.ReactNode }) {
+    // Load persisted data synchronously to avoid empty initial state
+    const persistedMarkers = typeof window !== 'undefined' ? getPersistedMarkers() : [];
+
+    const [accumulatedMarkers, setAccumulatedMarkers] = useState<CrisisMarker[]>(persistedMarkers);
+    const [pendingQuery, setPendingQuery] = useState<string | null>(null);
+
+    // Add new markers to accumulated list
+    const addMarkers = useCallback((newMarkers: CrisisMarker[]) => {
+        if (!newMarkers || newMarkers.length === 0) return;
+
+        const updatedMarkers = addMarkersToStorage(newMarkers);
+        setAccumulatedMarkers(updatedMarkers);
+        console.log('✅ Added markers, total:', updatedMarkers.length);
+    }, []);
+
+    // Clear all persisted data
+    const clearAllData = useCallback(() => {
+        clearPersistedState();
+        setAccumulatedMarkers([]);
+        if (typeof window !== 'undefined') {
+            window.location.reload();
+        }
+    }, []);
+
+    const contextValue: MapChatContextType = {
+        pendingQuery,
+        setPendingQuery,
+        accumulatedMarkers,
+        addMarkers,
+        setAccumulatedMarkers,
+        clearAllData,
+    };
+
+    return (
+        <MapChatContext.Provider value={contextValue}>
+            {children}
+        </MapChatContext.Provider>
+    );
+}
+
+/**
  * Component that restores the thread from localStorage on mount
- * Must be inside TamboProvider to access useTamboThread
- * 
- * IMPORTANT: Only restores threads that completed successfully.
- * If the last session ended with an error/cancel, starts fresh.
  */
 function ThreadRestorer() {
     const { switchCurrentThread, startNewThread, thread } = useTamboThread();
     const hasAttemptedRestore = useRef(false);
     const hasCheckedCurrentThread = useRef(false);
 
-    // First effect: Try to restore the persisted thread
     useEffect(() => {
         if (hasAttemptedRestore.current) return;
         hasAttemptedRestore.current = true;
 
         const persistedThread = getPersistedThreadData();
 
-        // Check if persisted thread has valid messages (no errors)
         if (persistedThread?.threadId && persistedThread.messages?.length > 0) {
-            // Check if any message has an error
             const hasErrorMessage = persistedThread.messages.some((m: any) => m.error);
 
             if (hasErrorMessage) {
@@ -91,12 +129,10 @@ function ThreadRestorer() {
         }
     }, [switchCurrentThread]);
 
-    // Second effect: Check if the current thread has errors and start fresh if needed
     useEffect(() => {
         if (hasCheckedCurrentThread.current) return;
         if (!thread?.messages || thread.messages.length === 0) return;
 
-        // Check if any message in the current thread has an error
         const hasErrorMessage = thread.messages.some((m: any) => m.error);
 
         if (hasErrorMessage) {
@@ -118,7 +154,6 @@ function DeleteThreadButton({ onDelete }: { onDelete: () => void }) {
     const [storageInfo, setStorageInfo] = useState<string>("");
 
     useEffect(() => {
-        // Update storage info periodically
         const updateInfo = () => {
             const size = getStorageSize();
             const hasData = hasPersistedData();
@@ -173,20 +208,12 @@ function DeleteThreadButton({ onDelete }: { onDelete: () => void }) {
     );
 }
 
-/**
- * VeronicaContent - Main content component with TamboProvider
- * 
- * This is in a separate file to allow dynamic import with ssr: false,
- * which prevents react-media-recorder from being evaluated during SSR.
- */
 // Hook to detect mobile devices (phones only, not tablets)
 function useIsMobile() {
     const [isMobile, setIsMobile] = useState(false);
 
     useEffect(() => {
         const checkMobile = () => {
-            // Check if it's a mobile device (screen width <= 640px, which is sm breakpoint)
-            // This will be true for phones but false for tablets and desktops
             const isMobileDevice = window.innerWidth <= 640;
             setIsMobile(isMobileDevice);
         };
@@ -236,59 +263,8 @@ function MobileChatDrawer({ onClearData }: { onClearData: () => void }) {
 }
 
 export function VeronicaContent() {
-    // Load MCP server configurations
     const mcpServers = useMcpServers();
-
-    // State for pending query from map selection
-    const [pendingQuery, setPendingQuery] = useState<string | null>(null);
-
-    // Accumulated markers state - persisted to local storage
-    const [accumulatedMarkers, setAccumulatedMarkers] = useState<CrisisMarker[]>([]);
-
-    // Check if mobile device
     const isMobile = useIsMobile();
-
-    // Load persisted markers on mount
-    useEffect(() => {
-        const persistedMarkers = getPersistedMarkers();
-        if (persistedMarkers.length > 0) {
-            console.log('Loaded persisted markers:', persistedMarkers.length);
-            setAccumulatedMarkers(persistedMarkers);
-        }
-    }, []);
-
-    // Add new markers to accumulated list
-    const addMarkers = useCallback((newMarkers: CrisisMarker[]) => {
-        if (!newMarkers || newMarkers.length === 0) return;
-
-        const updatedMarkers = addMarkersToStorage(newMarkers);
-        setAccumulatedMarkers(updatedMarkers);
-        console.log('Added markers, total:', updatedMarkers.length);
-    }, []);
-
-    // Clear all persisted data
-    const clearAllData = useCallback(() => {
-        clearPersistedState();
-        setAccumulatedMarkers([]);
-        // Reload the page to reset Tambo state
-        window.location.reload();
-    }, []);
-
-
-
-    // Handler for location selection from the map
-    const handleLocationSelect = useCallback((location: SelectedLocation, query: string) => {
-        console.log('Location selected:', location, 'Query:', query);
-        setPendingQuery(query);
-    }, []);
-
-    const contextValue = {
-        pendingQuery,
-        setPendingQuery,
-        accumulatedMarkers,
-        addMarkers,
-        clearAllData,
-    };
 
     return (
         <TamboProvider
@@ -297,60 +273,75 @@ export function VeronicaContent() {
             tools={tools}
             mcpServers={mcpServers}
         >
-            {/* Toast notifications */}
             <Toaster position="top-center" richColors />
-            
-            {/* Restore thread from localStorage on mount */}
             <ThreadRestorer />
-            <MapChatContext.Provider value={contextValue}>
+            <MapChatProvider>
                 {isMobile ? (
-                    // Mobile Layout
-                    <div className="relative h-screen w-full overflow-hidden bg-background">
-                        {/* Full screen map on mobile */}
-                        <div className="absolute inset-0 bg-zinc-950">
-                            <InteractableTacticalMap
-                                centerLongitude={0}
-                                centerLatitude={20}
-                                zoomLevel={2}
-                                onLocationSelect={handleLocationSelect}
-                            />
-                        </div>
-                        
-                        {/* Floating Ask Veronica button */}
-                        <MobileChatDrawer onClearData={clearAllData} />
-                    </div>
+                    <MobileLayout />
                 ) : (
-                    // Desktop Layout
-                    <div className="flex h-screen w-full overflow-hidden bg-background">
-                        {/* Left Stage: Tactical Map (70% / Flex-1) */}
-                        <div className="flex-1 relative h-full bg-zinc-950">
-                            {/* InteractableTacticalMap - Tambo can update this map directly */}
-                            <InteractableTacticalMap
-                                centerLongitude={0}
-                                centerLatitude={20}
-                                zoomLevel={2}
-                                onLocationSelect={handleLocationSelect}
-                            />
-                        </div>
-
-                        {/* Right Sidebar: Chat Interface (35%) */}
-                        <aside className="w-[35%] min-w-[380px] max-w-[800px] h-full border-l border-border bg-sidebar flex flex-col relative shadow-xl z-20">
-                            <div className="flex-1 flex flex-col overflow-hidden">
-                                <div className="p-4 border-b border-border flex justify-between items-center bg-sidebar shrink-0">
-                                    <span className="font-semibold text-sm">Veronica</span>
-                                    <div className="flex items-center gap-2">
-                                        <DeleteThreadButton onDelete={clearAllData} />
-                                        <ThemeToggle />
-                                    </div>
-                                </div>
-                                <div className="flex-1 min-h-0 relative">
-                                    <ChatSidebar />
-                                </div>
-                            </div>
-                        </aside>
-                    </div>
+                    <DesktopLayout />
                 )}
-            </MapChatContext.Provider>
+            </MapChatProvider>
         </TamboProvider>
+    );
+}
+
+function MobileLayout() {
+    const { setPendingQuery, clearAllData } = useMapChatContext();
+
+    const handleLocationSelect = useCallback((location: SelectedLocation, query: string) => {
+        console.log('Location selected:', location, 'Query:', query);
+        setPendingQuery(query);
+    }, [setPendingQuery]);
+
+    return (
+        <div className="relative h-screen w-full overflow-hidden bg-background">
+            <div className="absolute inset-0 bg-zinc-950">
+                <InteractableTacticalMap
+                    centerLongitude={0}
+                    centerLatitude={20}
+                    zoomLevel={2}
+                    onLocationSelect={handleLocationSelect}
+                />
+            </div>
+            <MobileChatDrawer onClearData={clearAllData} />
+        </div>
+    );
+}
+
+function DesktopLayout() {
+    const { setPendingQuery, clearAllData } = useMapChatContext();
+
+    const handleLocationSelect = useCallback((location: SelectedLocation, query: string) => {
+        console.log('Location selected:', location, 'Query:', query);
+        setPendingQuery(query);
+    }, [setPendingQuery]);
+
+    return (
+        <div className="flex h-screen w-full overflow-hidden bg-background">
+            <div className="flex-1 relative h-full bg-zinc-950">
+                <InteractableTacticalMap
+                    centerLongitude={0}
+                    centerLatitude={20}
+                    zoomLevel={2}
+                    onLocationSelect={handleLocationSelect}
+                />
+            </div>
+
+            <aside className="w-[35%] min-w-[380px] max-w-[800px] h-full border-l border-border bg-sidebar flex flex-col relative shadow-xl z-20">
+                <div className="flex-1 flex flex-col overflow-hidden">
+                    <div className="p-4 border-b border-border flex justify-between items-center bg-sidebar shrink-0">
+                        <span className="font-semibold text-sm">Veronica</span>
+                        <div className="flex items-center gap-2">
+                            <DeleteThreadButton onDelete={clearAllData} />
+                            <ThemeToggle />
+                        </div>
+                    </div>
+                    <div className="flex-1 min-h-0 relative">
+                        <ChatSidebar />
+                    </div>
+                </div>
+            </aside>
+        </div>
     );
 }

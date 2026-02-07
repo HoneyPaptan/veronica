@@ -1,30 +1,35 @@
 import { z } from "zod";
 
 /**
+ * Helper to safely handle null values from Tambo streaming.
+ * Zod's .optional() handles undefined but not null - this fixes that.
+ */
+const safeString = (defaultValue: string = "") =>
+    z.preprocess(
+        (val) => (val === null || val === undefined) ? defaultValue : val,
+        z.string()
+    );
+
+const safeNumber = (defaultValue: number = 0) =>
+    z.preprocess(
+        (val) => (val === null || val === undefined) ? defaultValue : val,
+        z.coerce.number()
+    );
+
+/**
  * Schema for crisis markers that Tambo can manipulate
+ * Using preprocess to convert null -> default values for streaming partial data from Tambo
  */
 export const crisisMarkerSchema = z.object({
-    id: z.string().describe("Unique identifier for the crisis event"),
-    title: z.string().describe("Title or name of the crisis event"),
-    description: z
-        .string()
-        .optional()
-        .describe("Detailed description of the crisis"),
-    latitude: z
-        .coerce.number()
-        .describe(
-            "Latitude coordinate of the crisis location. Can be a number or numeric string."
-        ),
-    longitude: z
-        .coerce.number()
-        .describe(
-            "Longitude coordinate of the crisis location. Can be a number or numeric string."
-        ),
-    category: z
-        .enum(["wildfire", "volcano", "earthquake", "flood", "storm", "news", "other"])
-        .describe(
-            "Category of the crisis event. Use 'news' for article markers from Tavily."
-        ),
+    id: safeString("").describe("Unique identifier for the crisis event"),
+    title: safeString("Untitled").describe("Title or name of the crisis event"),
+    description: safeString("").describe("Detailed description of the crisis"),
+    latitude: safeNumber(0).describe("Latitude coordinate of the crisis location. Can be a number or numeric string."),
+    longitude: safeNumber(0).describe("Longitude coordinate of the crisis location. Can be a number or numeric string."),
+    category: z.preprocess(
+        (val) => (val === null || val === undefined) ? "other" : val,
+        z.enum(["wildfire", "volcano", "earthquake", "flood", "storm", "news", "other"])
+    ).describe("Category of the crisis event. Use 'news' for article markers from Tavily."),
     severity: z
         .enum(["low", "medium", "high", "critical"])
         .optional()
@@ -34,43 +39,60 @@ export const crisisMarkerSchema = z.object({
     url: z
         .string()
         .optional()
-        .describe(
-            "URL link to the primary source article for this crisis event (e.g. Tavily or NASA)."
-        ),
+        .describe("URL link to the primary source article for this crisis event (e.g. Tavily or NASA)."),
+    // NEW: Marker styling for special markers like safe spots
+    markerStyle: z.preprocess(
+        (val) => (val === null || val === undefined) ? "default" : val,
+        z.enum(["default", "safeSpot"])
+    ).describe("Marker style: 'default' for crisis markers, 'safeSpot' for evacuation safe spots with glowing effect"),
+    safeSpotType: z.preprocess(
+        (val) => (val === null || val === undefined) ? "hospital" : val,
+        z.enum(["hospital", "park", "airport", "shelter", "school"])
+    ).describe("Type of safe spot - determines icon and glow color. Only used when markerStyle is 'safeSpot'"),
+    distance: z
+        .number()
+        .optional()
+        .describe("Distance from crisis in km - only for safe spot markers"),
     relatedNews: z
         .array(
             z.object({
-                id: z.string().describe("Stable identifier for the news article"),
-                title: z.string().describe("Headline or title of the news article"),
-                url: z
-                    .string()
-                    .optional()
-                    .describe("URL to the full news article (if available)"),
-                source: z
-                    .string()
-                    .optional()
-                    .describe("Name of the news outlet or data provider"),
-                snippet: z
-                    .string()
-                    .optional()
-                    .describe("Short summary or snippet describing the article"),
-                publishedAt: z
-                    .string()
-                    .optional()
-                    .describe("Published date/time in ISO 8601 format if known"),
-                image: z
-                    .string()
-                    .optional()
-                    .describe("URL to the article image/thumbnail"),
+                id: safeString("").describe("Stable identifier for the news article"),
+                title: safeString("").describe("Headline or title of the news article"),
+                url: z.string().optional().describe("URL to the full news article (if available)"),
+                source: z.string().optional().describe("Name of the news outlet or data provider"),
+                snippet: z.string().optional().describe("Short summary or snippet describing the article"),
+                publishedAt: z.string().optional().describe("Published date/time in ISO 8601 format if known"),
+                image: z.string().optional().describe("URL to the article image/thumbnail"),
             })
         )
         .optional()
-        .describe(
-            "Optional list of local news articles related to this crisis, typically fetched from Tavily for the marker's location. Only populate for real crisis events (not generic regions or routes)."
-        ),
+        .describe("Optional list of local news articles related to this crisis, typically fetched from Tavily for the marker's location. Only populate for real crisis events (not generic regions or routes)."),
 });
 
-export type CrisisMarker = z.infer<typeof crisisMarkerSchema>;
+export type CrisisMarker = {
+    id: string;
+    title: string;
+    description: string;
+    latitude: number;
+    longitude: number;
+    category: "wildfire" | "volcano" | "earthquake" | "flood" | "storm" | "news" | "other";
+    severity?: "low" | "medium" | "high" | "critical";
+    date?: string;
+    source?: string;
+    url?: string;
+    markerStyle: "default" | "safeSpot";
+    safeSpotType: "hospital" | "park" | "airport" | "shelter" | "school";
+    distance?: number;
+    relatedNews?: Array<{
+        id: string;
+        title: string;
+        url?: string;
+        source?: string;
+        snippet?: string;
+        publishedAt?: string;
+        image?: string;
+    }>;
+};
 
 // Common location coordinates that Tambo can use for zooming
 export const LOCATION_PRESETS: Record<string, { lat: number; lng: number; zoom: number }> = {

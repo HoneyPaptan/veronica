@@ -11,7 +11,7 @@
 import { Graph, graphSchema } from "@/components/tambo/graph";
 import { DataCard, dataCardSchema } from "@/components/ui/card-data";
 import { NewsCard, newsCardSchema } from "@/components/tambo/news-card";
-import { EvacuationTable } from "@/components/tambo/evacuation-table";
+// EvacuationTable removed - now using styled map markers instead
 import { TamboTool, TamboComponent } from "@tambo-ai/react";
 import { z } from "zod";
 
@@ -90,49 +90,7 @@ EXAMPLE:
     component: NewsCard,
     propsSchema: newsCardSchema,
   },
-  {
-    name: "EvacuationTable",
-    description: `REQUIRED: Display-only component showing evacuation safe spots in a table format.
-
-ALWAYS render this component when showing evacuation plans. The component is display-only and does not require AI interaction.
-
-CRITICAL INSTRUCTIONS:
-1. Call this component IMMEDIATELY after planEvacuation
-2. Pass ALL props from the tool result
-3. Component displays safe spots OR emergency contacts if none found
-4. NEVER skip this component
-
-PROPS to pass from tool result:
-- crisisTitle: Use result.crisisTitle (string)
-- safeSpots: Use result.allSafeSpots (array of objects with: id, name, type, latitude, longitude, distance)
-- bestRoute: Use result.primaryRoute (object with: toSafeSpotName, toSafeSpotType, distance, duration) or null
-- crisisLatitude: Use result.crisisLatitude (number)
-- crisisLongitude: Use result.crisisLongitude (number)
-
-NOTE: Users can click map markers directly to zoom. No zoom buttons in the table.`,
-    component: EvacuationTable,
-    propsSchema: z.object({
-      crisisTitle: z.string().describe("Title of the crisis event"),
-      safeSpots: z.array(
-        z.object({
-          id: z.string().describe("Safe spot ID"),
-          name: z.string().describe("Safe spot name"),
-          type: z.string().describe("Type of safe spot (hospital, park, airport, shelter, school)"),
-          latitude: z.number().describe("Latitude coordinate"),
-          longitude: z.number().describe("Longitude coordinate"),
-          distance: z.number().describe("Distance from crisis in km"),
-          address: z.string().optional().describe("Optional address"),
-          phone: z.string().optional().describe("Optional phone number"),
-        })
-      ).describe("Array of all safe spots from allSafeSpots"),
-      bestRoute: z.object({
-        toSafeSpotName: z.string().describe("Name of the best safe spot"),
-        toSafeSpotType: z.string().describe("Type of the best safe spot"),
-        distance: z.number().describe("Route distance in km"),
-        duration: z.number().describe("Route duration in minutes"),
-      }).nullable().describe("Primary route from plan result"),
-      crisisLatitude: z.number().describe("Crisis latitude from plan result"),
-      crisisLongitude: z.number().describe("Crisis longitude from plan result"),
-    }),
-  },
+  // NOTE: EvacuationTable removed - evacuation now uses styled markers on the map
+  // When planEvacuation is called, it returns markers with markerStyle="safeSpot"
+  // which render as glowing markers with icons (hospital, shelter, school, airport, park)
 ];

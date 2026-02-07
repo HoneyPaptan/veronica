@@ -10,10 +10,25 @@ import {
 } from "@/services/population-stats";
 import { getActiveFires } from "@/services/nasa-firms";
 import { searchGNews } from "@/services/gnews";
-import { planEvacuation, compactRouteToMapRoute, safeSpotsToMarkers } from "@/services/evacuation-service";
+import { findEvacuationSpots } from "@/services/evacuation-service";
 import { TamboTool } from "@tambo-ai/react";
 import { crisisMarkerSchema } from "@/lib/markers";
 import { z } from "zod";
+
+/**
+ * Helper to handle null values from Tambo streaming - converts null -> default before validation
+ */
+const safeStr = (defaultValue: string = "") =>
+    z.preprocess(
+        (val) => (val === null || val === undefined) ? defaultValue : val,
+        z.string()
+    );
+
+const safeNum = (defaultValue: number = 0) =>
+    z.preprocess(
+        (val) => (val === null || val === undefined) ? defaultValue : val,
+        z.number()
+    );
 
 /**
  * tools
@@ -183,58 +198,41 @@ DO NOT create new markers or change their latitude/longitude values!`,
     },
     {
         name: "planEvacuation",
-        description: `🚨 OPTIMIZED EVACUATION TOOL - Fast, lightweight emergency planning
+        description: `🚨 EVACUATION SAFE SPOTS - Find nearest safe locations
 
 WHAT THIS TOOL DOES:
-1. Finds nearest safe spots prioritizing: hospitals (🏥) > shelters (🏠) > schools (🏫) > airports (✈️) > parks (🌳)
-2. Calculates ONE primary route to the BEST safe spot (reduces data size)
-3. Samples route coordinates (keeps every 10th point) to prevent streaming errors
-4. Returns ALL safe spots for table display in chat
+1. Finds up to 5 nearest safe spots: hospitals (🏥) > shelters (🏠) > schools (🏫) > airports (✈️) > parks (🌳)
+2. Returns markers with special "safeSpot" styling for glowing map markers
+3. NO routes - just markers displayed on the map
 
 WHEN TO USE:
 - User clicks "Plan Evacuation" button on any crisis marker
-- User asks: "Plan evacuation" or "Show evacuation routes"
+- User asks: "Find safe spots" or "Where can I evacuate?"
 
-AUTOMATIC WORKFLOW:
-1. Call planEvacuation tool
-2. Render EvacuationTable with ALL props from result
-3. Update TacticalMap with markers and routes
-4. Provide brief summary
+WORKFLOW:
+1. Call this tool with crisis location
+2. Update TacticalMap with the returned markers (they will render with glowing style)
+3. Set flyToMarkers=true to zoom to fit all markers
+4. Tell user the summary
+
+IF NO SPOTS FOUND:
+- Tell user to call emergency services (112 universal number)
+- No markers to display
 
 EXAMPLE:
 const result = await planEvacuation({ crisisId, crisisTitle, latitude, longitude })
-
-return (
-  <>
-    <EvacuationTable 
-      crisisTitle={result.crisisTitle}
-      safeSpots={result.allSafeSpots}
-      bestRoute={result.primaryRoute}
-      crisisLatitude={result.crisisLatitude}
-      crisisLongitude={result.crisisLongitude}
-    />
-    <p>{result.summary}</p>
-  </>
-)
-
-EXAMPLE CALL:
-{ crisisId: "fire-001", crisisTitle: "Wildfire", latitude: 34.05, longitude: -118.24 }`,
+// result.summary = "Found 3 safe locations near Wildfire. Nearest: Hospital XYZ - 2.5km"
+// result.markers = [{...markerStyle: "safeSpot", safeSpotType: "hospital"...}]`,
         tool: async (input: { crisisId: string; crisisTitle: string; latitude: number; longitude: number }) => {
-            const plan = await planEvacuation(input.crisisId, input.crisisTitle, input.latitude, input.longitude);
-            
-            // Build map routes - only one primary route to reduce payload
-            const mapRoutes = plan.primaryRoute ? [compactRouteToMapRoute(plan.primaryRoute)] : [];
-            
+            const result = await findEvacuationSpots(input.crisisId, input.crisisTitle, input.latitude, input.longitude);
+
+            // Return markers directly (already in crisisMarkerSchema format)
             return {
-                summary: plan.summary,
-                allSafeSpots: plan.allSafeSpots,
-                primaryRoute: plan.primaryRoute,
-                bestSafeSpot: plan.bestSafeSpot,
-                crisisLatitude: plan.crisisLatitude,
-                crisisLongitude: plan.crisisLongitude,
-                // For map display
-                markers: safeSpotsToMarkers(plan.allSafeSpots, input.crisisId),
-                mapRoutes: mapRoutes,
+                summary: result.summary,
+                markers: result.markers,
+                crisisLatitude: result.crisisLatitude,
+                crisisLongitude: result.crisisLongitude,
+                found: result.found,
             };
         },
         inputSchema: z.object({
@@ -244,52 +242,11 @@ EXAMPLE CALL:
             longitude: z.number().describe("Longitude of the crisis location"),
         }),
         outputSchema: z.object({
-            summary: z.string().describe("Human-readable summary of the evacuation plan"),
-            allSafeSpots: z.array(z.object({
-                id: z.string().default("unknown"),
-                name: z.string().default("Unknown Location"),
-                type: z.string().default("hospital"),
-                latitude: z.number().default(0),
-                longitude: z.number().default(0),
-                distance: z.number().default(0),
-                capacity: z.string().optional().default(""),
-                address: z.string().optional().default(""),
-                phone: z.string().optional().default(""),
-            })),
-            primaryRoute: z.object({
-                id: z.string().default(""),
-                crisisId: z.string().default(""),
-                crisisName: z.string().default(""),
-                toSafeSpotId: z.string().default(""),
-                toSafeSpotName: z.string().default(""),
-                toSafeSpotType: z.string().default("hospital"),
-                coordinates: z.array(z.tuple([z.number(), z.number()])).default([]),
-                totalPoints: z.number().default(0),
-                distance: z.number().default(0),
-                duration: z.number().default(0),
-                color: z.string().default("#3b82f6"),
-            }).nullable().default(null),
-            bestSafeSpot: z.object({
-                id: z.string().default(""),
-                name: z.string().default(""),
-                type: z.string().default("hospital"),
-                latitude: z.number().default(0),
-                longitude: z.number().default(0),
-                distance: z.number().default(0),
-                capacity: z.string().optional().default(""),
-                address: z.string().optional().default(""),
-                phone: z.string().optional().default(""),
-            }).nullable().default(null),
-            crisisLatitude: z.number().describe("Latitude of crisis location"),
-            crisisLongitude: z.number().describe("Longitude of crisis location"),
-            markers: z.array(crisisMarkerSchema),
-            mapRoutes: z.array(z.object({
-                id: z.string(),
-                coordinates: z.array(z.tuple([z.number(), z.number()])),
-                color: z.string(),
-                width: z.number(),
-                label: z.string(),
-            })),
+            summary: z.string().describe("Human-readable summary of the results"),
+            markers: z.array(crisisMarkerSchema).describe("Safe spot markers with special styling"),
+            crisisLatitude: z.number().describe("Crisis latitude for map centering"),
+            crisisLongitude: z.number().describe("Crisis longitude for map centering"),
+            found: z.boolean().describe("Whether any safe spots were found"),
         }),
     },
 ];

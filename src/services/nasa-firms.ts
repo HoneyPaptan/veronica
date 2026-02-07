@@ -135,6 +135,8 @@ function firesToCrisisMarkers(fires: FIRMSFirePoint[], limit = 100): CrisisMarke
         severity: getFireSeverity(fire.confidence, fire.frp || 0),
         date: fire.acq_date,
         source: `NASA FIRMS (${fire.instrument})`,
+        markerStyle: "default" as const,
+        safeSpotType: "hospital" as const,
     }));
 }
 
@@ -222,6 +224,8 @@ function getMockFireData(input: GetActiveFiresInput): CrisisMarker[] {
             severity: severities[Math.floor(Math.random() * severities.length)],
             date: new Date().toISOString().split("T")[0],
             source: "Mock Data (Configure API Key)",
+            markerStyle: "default" as const,
+            safeSpotType: "hospital" as const,
         });
     }
 

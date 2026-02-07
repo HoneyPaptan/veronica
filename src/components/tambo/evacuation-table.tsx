@@ -96,26 +96,61 @@ export function EvacuationTable(props: EvacuationTableProps) {
       crisisLongitude: rawCrisisLongitude,
     } = props || {};
 
-    const crisisTitle = typeof rawCrisisTitle === 'string' && rawCrisisTitle.length > 0 
-      ? rawCrisisTitle 
-      : "Unknown Crisis";
-    
+    const crisisTitle = typeof rawCrisisTitle === 'string' && rawCrisisTitle.length > 0
+      ? rawCrisisTitle
+      : "Evacuation Plan";
+
     const safeSpots = Array.isArray(rawSafeSpots) ? rawSafeSpots : [];
     const bestRoute = rawBestRoute && typeof rawBestRoute === 'object' ? rawBestRoute : null;
     const crisisLatitude = typeof rawCrisisLatitude === 'number' ? rawCrisisLatitude : undefined;
     const crisisLongitude = typeof rawCrisisLongitude === 'number' ? rawCrisisLongitude : undefined;
 
+    // Check if we're still in a streaming/loading state (no crisis title or coordinates yet)
+    const isLoading = !rawCrisisTitle && crisisLatitude === undefined && crisisLongitude === undefined;
+
+    // Filter out invalid safe spots (those with missing critical data)
+    const validSafeSpots = safeSpots.filter(spot =>
+      spot &&
+      typeof spot.name === 'string' &&
+      typeof spot.type === 'string' &&
+      typeof spot.latitude === 'number' &&
+      typeof spot.longitude === 'number'
+    );
+
     // Sort by priority type then distance
     const priorityOrder = ["hospital", "shelter", "school", "airport", "park"];
-    const sortedSpots = [...safeSpots].sort((a, b) => {
+    const sortedSpots = [...validSafeSpots].sort((a, b) => {
       const priorityA = priorityOrder.indexOf(a.type);
       const priorityB = priorityOrder.indexOf(b.type);
       if (priorityA !== priorityB) return priorityA - priorityB;
-      return a.distance - b.distance;
+      return (a.distance || 0) - (b.distance || 0);
     });
 
     const hasSafeSpots = sortedSpots.length > 0;
     const hasValidCoordinates = isValidCoordinate(crisisLatitude, crisisLongitude);
+
+    // Show loading state while data is streaming
+    if (isLoading) {
+      return (
+        <div className="w-full bg-card border border-border rounded-lg overflow-hidden shadow-sm">
+          <div className="bg-muted/50 px-4 py-3 border-b border-border">
+            <div className="flex items-center gap-2">
+              <Navigation className="h-5 w-5 text-primary animate-pulse" />
+              <h3 className="font-semibold text-foreground">Planning Evacuation Route...</h3>
+            </div>
+            <p className="text-sm text-muted-foreground mt-1">
+              Searching for nearby safe locations and calculating routes...
+            </p>
+          </div>
+          <div className="p-6 flex items-center justify-center">
+            <div className="flex flex-col items-center gap-3 text-muted-foreground">
+              <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+              <span className="text-sm">Finding hospitals, shelters, and safe spots...</span>
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="w-full bg-card border border-border rounded-lg overflow-hidden shadow-sm">
@@ -127,7 +162,7 @@ export function EvacuationTable(props: EvacuationTableProps) {
           </div>
           {bestRoute && (
             <p className="text-sm text-muted-foreground mt-1">
-              Best route: <span className="font-medium text-foreground">{bestRoute.toSafeSpotName}</span> 
+              Best route: <span className="font-medium text-foreground">{bestRoute.toSafeSpotName}</span>
               {" "}({bestRoute.distance}km, {bestRoute.duration} min drive)
             </p>
           )}
@@ -151,10 +186,10 @@ export function EvacuationTable(props: EvacuationTableProps) {
                     const Icon = typeIcons[spot.type] || Building2;
                     const colorClass = typeColors[spot.type] || "text-gray-500 bg-gray-50 border-gray-200";
                     const label = typeLabels[spot.type] || spot.type || "Location";
-                    
+
                     return (
-                      <tr 
-                        key={spot.id || `spot-${Math.random()}`} 
+                      <tr
+                        key={spot.id || `spot-${Math.random()}`}
                         className="hover:bg-muted/30 transition-colors"
                       >
                         <td className="px-4 py-3">
@@ -181,7 +216,7 @@ export function EvacuationTable(props: EvacuationTableProps) {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1 text-xs text-muted-foreground">
                             <MapPin className="h-3 w-3" />
-                            {spot.latitude.toFixed(4)}, {spot.longitude.toFixed(4)}
+                            {typeof spot.latitude === 'number' ? spot.latitude.toFixed(4) : '?'}, {typeof spot.longitude === 'number' ? spot.longitude.toFixed(4) : '?'}
                           </div>
                         </td>
                       </tr>
@@ -204,7 +239,7 @@ export function EvacuationTable(props: EvacuationTableProps) {
               <div>
                 <h4 className="font-semibold text-red-700">No Safe Locations Found</h4>
                 <p className="text-sm text-red-600 mt-1">
-                  No hospitals, shelters, or evacuation centers were found within 30km of this crisis location. 
+                  No hospitals, shelters, or evacuation centers were found within 30km of this crisis location.
                   This area may be remote or the data may be incomplete.
                 </p>
               </div>
@@ -216,7 +251,7 @@ export function EvacuationTable(props: EvacuationTableProps) {
                 <Phone className="h-4 w-4" />
                 Emergency Contacts
               </h4>
-              
+
               {/* Universal Number */}
               <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
                 <div className="text-sm text-muted-foreground">Universal Emergency Number</div>
