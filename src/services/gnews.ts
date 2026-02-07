@@ -332,7 +332,9 @@ export async function searchGNews(
                 snippet: description,
                 publishedAt,
                 image: imageUrl
-            }]
+            }],
+            markerStyle: "default" as const,
+            safeSpotType: "hospital" as const,
         };
     });
 

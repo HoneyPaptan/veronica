@@ -11,7 +11,9 @@
 import { Graph, graphSchema } from "@/components/tambo/graph";
 import { DataCard, dataCardSchema } from "@/components/ui/card-data";
 import { NewsCard, newsCardSchema } from "@/components/tambo/news-card";
+// EvacuationTable removed - now using styled map markers instead
 import { TamboTool, TamboComponent } from "@tambo-ai/react";
+import { z } from "zod";
 
 // Re-export tools from dedicated server-safe file
 export { tools } from "@/lib/tambo-tools";
@@ -88,4 +90,7 @@ EXAMPLE:
     component: NewsCard,
     propsSchema: newsCardSchema,
   },
+  // NOTE: EvacuationTable removed - evacuation now uses styled markers on the map
+  // When planEvacuation is called, it returns markers with markerStyle="safeSpot"
+  // which render as glowing markers with icons (hospital, shelter, school, airport, park)
 ];

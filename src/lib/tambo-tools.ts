@@ -10,9 +10,25 @@ import {
 } from "@/services/population-stats";
 import { getActiveFires } from "@/services/nasa-firms";
 import { searchGNews } from "@/services/gnews";
+import { findEvacuationSpots } from "@/services/evacuation-service";
 import { TamboTool } from "@tambo-ai/react";
 import { crisisMarkerSchema } from "@/lib/markers";
 import { z } from "zod";
+
+/**
+ * Helper to handle null values from Tambo streaming - converts null -> default before validation
+ */
+const safeStr = (defaultValue: string = "") =>
+    z.preprocess(
+        (val) => (val === null || val === undefined) ? defaultValue : val,
+        z.string()
+    );
+
+const safeNum = (defaultValue: number = 0) =>
+    z.preprocess(
+        (val) => (val === null || val === undefined) ? defaultValue : val,
+        z.number()
+    );
 
 /**
  * tools
@@ -179,5 +195,58 @@ DO NOT create new markers or change their latitude/longitude values!`,
             longitude: z.number().optional().describe("REQUIRED for map selections: Exact longitude from user's selected coordinates")
         }),
         outputSchema: z.array(crisisMarkerSchema)
+    },
+    {
+        name: "planEvacuation",
+        description: `🚨 EVACUATION SAFE SPOTS - Find nearest safe locations
+
+WHAT THIS TOOL DOES:
+1. Finds up to 5 nearest safe spots: hospitals (🏥) > shelters (🏠) > schools (🏫) > airports (✈️) > parks (🌳)
+2. Returns markers with special "safeSpot" styling for glowing map markers
+3. NO routes - just markers displayed on the map
+
+WHEN TO USE:
+- User clicks "Plan Evacuation" button on any crisis marker
+- User asks: "Find safe spots" or "Where can I evacuate?"
+
+WORKFLOW:
+1. Call this tool with crisis location
+2. Update TacticalMap with the returned markers (they will render with glowing style)
+3. Set flyToMarkers=true to zoom to fit all markers
+4. Tell user the summary
+
+IF NO SPOTS FOUND:
+- Tell user to call emergency services (112 universal number)
+- No markers to display
+
+EXAMPLE:
+const result = await planEvacuation({ crisisId, crisisTitle, latitude, longitude })
+// result.summary = "Found 3 safe locations near Wildfire. Nearest: Hospital XYZ - 2.5km"
+// result.markers = [{...markerStyle: "safeSpot", safeSpotType: "hospital"...}]`,
+        tool: async (input: { crisisId: string; crisisTitle: string; latitude: number; longitude: number }) => {
+            const result = await findEvacuationSpots(input.crisisId, input.crisisTitle, input.latitude, input.longitude);
+
+            // Return markers directly (already in crisisMarkerSchema format)
+            return {
+                summary: result.summary,
+                markers: result.markers,
+                crisisLatitude: result.crisisLatitude,
+                crisisLongitude: result.crisisLongitude,
+                found: result.found,
+            };
+        },
+        inputSchema: z.object({
+            crisisId: z.string().describe("Unique identifier for the crisis event (use the marker's id)"),
+            crisisTitle: z.string().describe("Title/name of the crisis for display purposes"),
+            latitude: z.number().describe("Latitude of the crisis location"),
+            longitude: z.number().describe("Longitude of the crisis location"),
+        }),
+        outputSchema: z.object({
+            summary: z.string().describe("Human-readable summary of the results"),
+            markers: z.array(crisisMarkerSchema).describe("Safe spot markers with special styling"),
+            crisisLatitude: z.number().describe("Crisis latitude for map centering"),
+            crisisLongitude: z.number().describe("Crisis longitude for map centering"),
+            found: z.boolean().describe("Whether any safe spots were found"),
+        }),
     },
 ];
