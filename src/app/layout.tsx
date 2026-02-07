@@ -16,7 +16,29 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "Veronica",
-  description: "A modern AI-powered application built with Next.js",
+  description: "Static dashboards fail in a crisis. Veronica uses Tambo AI to build live tactical maps, track wildfires, and plot evacuation routes in real-time.",
+  openGraph: {
+    title: "Veronica",
+    description: "Static dashboards fail in a crisis. Veronica uses Tambo AI to build live tactical maps, track wildfires, and plot evacuation routes in real-time.",
+    url: "https://veronica-six.vercel.app",
+    siteName: "Veronica",
+    images: [
+      {
+        url: "/opengraphimg.png",
+        width: 1200,
+        height: 630,
+        alt: "Veronica",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Veronica",
+    description: "Static dashboards fail in a crisis. Veronica uses Tambo AI to build live tactical maps, track wildfires, and plot evacuation routes in real-time.z",
+    images: ["/opengraphimg.png"],
+  },
 };
 
 export default function RootLayout({
