@@ -496,7 +496,6 @@ export function useMcpServers(): McpServer[] {
         return true;
       });
     } catch (e) {
-      console.error("Failed to parse saved MCP servers", e);
       return [];
     }
   });
@@ -523,7 +522,6 @@ export function useMcpServers(): McpServer[] {
         });
         setServers(deduped);
       } catch (e) {
-        console.error("Failed to parse saved MCP servers", e);
         setServers([]);
       }
     };

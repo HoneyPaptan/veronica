@@ -726,7 +726,6 @@ export const TextEditor = React.forwardRef<TamboEditor, TextEditorProps>(
               try {
                 await onAddImage(item);
               } catch (error) {
-                console.error("Failed to add pasted image:", error);
               }
             }
           })();

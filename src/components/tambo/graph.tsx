@@ -71,7 +71,6 @@ class GraphErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error("Error rendering chart:", error, errorInfo);
   }
 
   render(): React.ReactNode {

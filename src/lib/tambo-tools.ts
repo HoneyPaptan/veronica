@@ -157,7 +157,7 @@ export const tools: TamboTool[] = [
     },
     {
         name: "getGNews",
-        description: `Fetch latest news articles from GNews API. Use this when the user asks for news, headlines, updates, or what's happening in a specific area.
+        description: `Fetch latest news articles from GNews API and display them as markers on the TacticalMap. Use this when the user asks for news, headlines, or what's happening in a specific area.
 
 USAGE:
 - For general news: query="top news" or "headlines"
@@ -171,22 +171,24 @@ When the user query contains coordinates like "31.3176, 75.4645" or "coordinates
 2. Extract the SECOND number as longitude (e.g. 75.4645)
 3. Pass these as the latitude and longitude parameters
 
-Example: "Get news for coordinates 31.3176, 75.4645 (Jalandhar)"
+EXAMPLE: "Get news for coordinates 31.3176, 75.4645 (Jalandhar)"
 -> Call with: { query: "news", location: "Jalandhar", latitude: 31.3176, longitude: 75.4645 }
 
-AFTER GETTING RESULTS - CRITICAL STEPS:
+IMPORTANT - WORKFLOW:
+1. Call this tool to fetch news and update the TacticalMap with markers
+2. DO NOT render any NewsCard component - the markers on the map ARE the news display
+3. Simply tell the user "Map updated with news articles" or "Found X news articles shown on the map"
+4. Users can click on markers to read more about each article
 
-1. UPDATE TacticalMap with the EXACT markers returned by this tool:
-   - DO NOT modify the marker coordinates!
-   - Pass the markers array DIRECTLY to TacticalMap
-   - TacticalMap props: { markers: <returned_markers>, flyToMarkers: true, enableClustering: false }
+DO NOT:
+- DO NOT render NewsCard component in the chat
+- DO NOT display article summaries in the chat
+- DO NOT show headlines or descriptions in the chat
 
-2. RENDER NewsCard component in chat:
-   - Extract article info from the markers' relatedNews field
-   - NewsCard props: { articles: [...], title: "News Headlines", location: "[location]" }
-
-IMPORTANT: The markers returned by this tool already have the correct coordinates. 
-DO NOT create new markers or change their latitude/longitude values!`,
+DO:
+- Update the TacticalMap with news markers
+- Inform the user the map has been updated with news locations
+- Let users click markers for details`,
         tool: searchGNews,
         inputSchema: z.object({
             query: z.string().describe("Search query (e.g. 'top news', 'headlines', 'wildfires')"),

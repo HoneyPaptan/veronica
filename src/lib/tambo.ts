@@ -70,23 +70,14 @@ EXAMPLE:
   },
   {
     name: "NewsCard",
-    description: `REQUIRED: Display news articles in the chat after fetching news with getGNews tool.
+    description: `DEPRECATED - DO NOT USE.
+News articles are now displayed ONLY as markers on the TacticalMap.
+The AI should NOT render this component.
 
-ALWAYS render this component when showing news to users. It displays clickable article cards with thumbnails, titles, descriptions, and links.
-
-PROPS:
-- articles: Array of {id, title, description, url, source, publishedAt, image}
-- title: Header text (e.g. "Top Headlines from India")
-- location: Location context
-
-EXAMPLE:
-{
-  articles: [
-    {id: "1", title: "Breaking News", description: "Details...", url: "https://...", source: "CNN", publishedAt: "2024-01-15", image: "https://..."}
-  ],
-  title: "Latest News",
-  location: "India"
-}`,
+When users ask for news:
+1. Call getGNews tool to update the map with news markers
+2. Simply tell the user "Map updated with X news articles"
+3. Users can click markers to read more about each article`,
     component: NewsCard,
     propsSchema: newsCardSchema,
   },

@@ -70,14 +70,12 @@ export function getPersistedState(): PersistedState | null {
         
         // Version check for future migrations
         if (parsed.version !== CURRENT_VERSION) {
-            console.warn("Persisted state version mismatch, clearing...");
             clearPersistedState();
             return null;
         }
 
         return parsed;
     } catch (error) {
-        console.error("Failed to parse persisted state:", error);
         return null;
     }
 }
@@ -95,7 +93,6 @@ export function savePersistedState(state: Omit<PersistedState, "version">): void
         };
         localStorage.setItem(STORAGE_KEYS.THREAD_DATA, JSON.stringify(dataToSave));
     } catch (error) {
-        console.error("Failed to save persisted state:", error);
     }
 }
 
@@ -107,9 +104,7 @@ export function clearPersistedState(): void {
 
     try {
         localStorage.removeItem(STORAGE_KEYS.THREAD_DATA);
-        console.log("Persisted state cleared");
     } catch (error) {
-        console.error("Failed to clear persisted state:", error);
     }
 }
 

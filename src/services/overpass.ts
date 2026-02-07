@@ -33,8 +33,6 @@ export async function findSafePointsNear(
   radiusKm: number = 10
 ): Promise<SafePoint[]> {
   try {
-    console.log(`🔍 Searching for safe points within ${radiusKm}km of ${latitude}, ${longitude}`);
-    
     // Simple, reliable query for safe evacuation points
     const query = `
       [out:json][timeout:30];
@@ -60,7 +58,6 @@ export async function findSafePointsNear(
     });
 
     if (!response.ok) {
-      console.warn(`Overpass API returned ${response.status}, returning empty results`);
       return [];
     }
 
@@ -110,12 +107,9 @@ export async function findSafePointsNear(
       return distA - distB;
     });
 
-    console.log(`✅ Found ${safePoints.length} safe points (${safePoints.filter(p => p.type === 'hospital').length} hospitals, ${safePoints.filter(p => p.type === 'airport').length} airports, ${safePoints.filter(p => p.type === 'park').length} parks)`);
     return safePoints;
     
   } catch (error) {
-    console.error('Error finding safe points:', error);
-    // Return empty array instead of throwing - graceful degradation
     return [];
   }
 }
@@ -135,7 +129,6 @@ export async function calculateRoute(
     const response = await fetch(url);
     
     if (!response.ok) {
-      console.warn(`OSRM API returned ${response.status}`);
       return null;
     }
 
@@ -153,7 +146,6 @@ export async function calculateRoute(
       duration: route.duration, // seconds
     };
   } catch (error) {
-    console.error('Error calculating route:', error);
     return null;
   }
 }

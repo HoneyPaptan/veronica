@@ -1047,7 +1047,6 @@ function MapRoute({
           geometry: { type: "LineString", coordinates },
         });
       } catch (error) {
-        console.warn('Failed to update route data:', error);
       }
     }
   }, [isLoaded, map, coordinates, sourceId]);

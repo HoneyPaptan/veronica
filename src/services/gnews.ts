@@ -194,12 +194,10 @@ export async function searchGNews(
     const apiKey = process.env.NEXT_PUBLIC_GNEWS_API_KEY;
 
     if (!apiKey) {
-        console.warn("Missing NEXT_PUBLIC_GNEWS_API_KEY. News search disabled.");
         return [];
     }
 
     if (!checkRateLimit()) {
-        console.warn("GNews rate limit reached for today.");
         throw new Error("GNews rate limit reached. Please try again tomorrow.");
     }
 
@@ -231,7 +229,7 @@ export async function searchGNews(
             headlinesUrl.searchParams.append("q", query);
         }
 
-        console.log("Fetching GNews headlines:", headlinesUrl.toString().replace(apiKey, "***"));
+
         
         const headlinesResponse = await fetch(headlinesUrl.toString());
         
@@ -256,25 +254,19 @@ export async function searchGNews(
             }
             searchUrl.searchParams.append("q", searchQuery);
             
-            console.log("Fetching GNews search:", searchUrl.toString().replace(apiKey, "***"));
-            
             const searchResponse = await fetch(searchUrl.toString());
-            
+
             if (searchResponse.ok) {
                 const data: GNewsResponse = await searchResponse.json();
                 articles = data.articles || [];
-            } else {
-                console.error("GNews search failed:", searchResponse.status, searchResponse.statusText);
             }
         }
         
     } catch (error) {
-        console.error("GNews fetch failed:", error);
         return [];
     }
 
     if (articles.length === 0) {
-        console.log("No articles found for query:", query, "location:", location);
         return [];
     }
 
@@ -286,33 +278,37 @@ export async function searchGNews(
     let baseLng: number;
     
     if (typeof exactLat === 'number' && typeof exactLng === 'number') {
-        // Use exact coordinates from map selection
         baseLat = exactLat;
         baseLng = exactLng;
-        console.log("Using exact coordinates from map selection:", baseLat, baseLng);
     } else {
-        // Fall back to location preset lookup
         const coords = location ? getLocationCoordinates(location) : null;
-        baseLat = coords?.lat ?? 20; // Default to world center
+        baseLat = coords?.lat ?? 20;
         baseLng = coords?.lng ?? 0;
-        console.log("Using preset coordinates for location:", location, baseLat, baseLng);
     }
 
     // Create individual markers for each article, spread around the location
-    const markers: CrisisMarker[] = articles.map((article, idx) => {
+    // Filter out articles with invalid/missing data before processing
+    const validArticles = articles.filter(article =>
+        article.title &&
+        article.title.trim().length > 0 &&
+        typeof article.title === 'string'
+    );
+
+    const markers: CrisisMarker[] = validArticles.map((article, idx) => {
         // Spread markers slightly around the center point for visibility
         // Use smaller offset (0.1 degree ~= 11km) for better clustering
         const offsetLat = (Math.random() - 0.5) * 0.2;
         const offsetLng = (Math.random() - 0.5) * 0.2;
-        
-        // Ensure no null/undefined values - use empty strings as fallbacks
-        const title = article.title || "News Article";
-        const description = article.description || article.content?.substring(0, 200) || "No description available";
-        const sourceName = article.source?.name || "Unknown Source";
+
+        // Ensure no null/undefined values - use safe fallbacks
+        const title = article.title || "";
+        const description = article.description || article.content?.substring(0, 200) || "";
+        const snippet = description;
+        const sourceName = article.source?.name || "";
         const articleUrl = article.url || "";
-        const publishedAt = article.publishedAt || new Date().toISOString();
+        const publishedAt = article.publishedAt || "";
         const imageUrl = article.image || "";
-        
+
         return {
             id: `gnews-${idx}-${Date.now()}`,
             title,
@@ -329,7 +325,7 @@ export async function searchGNews(
                 title,
                 url: articleUrl,
                 source: sourceName,
-                snippet: description,
+                snippet,
                 publishedAt,
                 image: imageUrl
             }],

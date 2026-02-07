@@ -68,7 +68,6 @@ function MapChatProvider({ children }: { children: React.ReactNode }) {
 
         const updatedMarkers = addMarkersToStorage(newMarkers);
         setAccumulatedMarkers(updatedMarkers);
-        console.log('✅ Added markers, total:', updatedMarkers.length);
     }, []);
 
     // Clear all persisted data
@@ -114,16 +113,13 @@ function ThreadRestorer() {
             const hasErrorMessage = persistedThread.messages.some((m: any) => m.error);
 
             if (hasErrorMessage) {
-                console.log('Persisted thread has errors, clearing and starting fresh');
                 clearPersistedState();
                 return;
             }
 
-            console.log('Attempting to restore thread:', persistedThread.threadId);
             try {
                 switchCurrentThread(persistedThread.threadId);
             } catch (err) {
-                console.log('Could not restore thread (may be expired):', err);
                 clearPersistedState();
             }
         }
@@ -137,7 +133,6 @@ function ThreadRestorer() {
 
         if (hasErrorMessage) {
             hasCheckedCurrentThread.current = true;
-            console.log('Current thread has errors, starting new thread');
             clearPersistedState();
             startNewThread();
         }
@@ -290,7 +285,6 @@ function MobileLayout() {
     const { setPendingQuery, clearAllData } = useMapChatContext();
 
     const handleLocationSelect = useCallback((location: SelectedLocation, query: string) => {
-        console.log('Location selected:', location, 'Query:', query);
         setPendingQuery(query);
     }, [setPendingQuery]);
 
@@ -313,7 +307,6 @@ function DesktopLayout() {
     const { setPendingQuery, clearAllData } = useMapChatContext();
 
     const handleLocationSelect = useCallback((location: SelectedLocation, query: string) => {
-        console.log('Location selected:', location, 'Query:', query);
         setPendingQuery(query);
     }, [setPendingQuery]);
 

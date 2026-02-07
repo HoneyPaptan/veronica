@@ -192,7 +192,6 @@ function useCombinedResourceList(
         }
       })
       .catch((error) => {
-        console.error("Failed to fetch external resources", error);
         if (!cancelled) {
           setExternalItems([]);
         }
@@ -261,7 +260,6 @@ function useCombinedPromptList(
         }
       })
       .catch((error) => {
-        console.error("Failed to fetch external prompts", error);
         if (!cancelled) {
           setExternalItems([]);
         }
@@ -522,7 +520,6 @@ const MessageInputInternal = React.forwardRef<
           editorRef.current?.focus();
         }, 0);
       } catch (error) {
-        console.error("Failed to submit message:", error);
         setDisplayValue(value);
         // On submit failure, also clear image error
         setImageError(null);
@@ -542,7 +539,6 @@ const MessageInputInternal = React.forwardRef<
         try {
           await cancel();
         } catch (cancelErr) {
-          console.error("Failed to cancel thread on error:", cancelErr);
         }
       } finally {
         setIsSubmitting(false);
@@ -612,7 +608,6 @@ const MessageInputInternal = React.forwardRef<
         try {
           await addImages(files);
         } catch (error) {
-          console.error("Failed to add dropped images:", error);
           setImageError(
             error instanceof Error
               ? error.message
@@ -974,9 +969,8 @@ const MessageInputPlainTextarea = ({
         // Mark this image as pasted so we can show "Image 1", "Image 2", etc.
         item[IS_PASTED_IMAGE] = true;
         await addImage(item);
-      } catch (error) {
-        console.error("Failed to add pasted image:", error);
-      }
+        } catch (error) {
+        }
     }
   };
 
@@ -1243,7 +1237,6 @@ const MessageInputFileButton = React.forwardRef<
       setImageError(null);
       await addImages(files);
     } catch (error) {
-      console.error("Failed to add selected files:", error);
     }
     // Reset the input so the same file can be selected again
     e.target.value = "";
